@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     await writeFile(tempFilePath, buffer);
 
     // Exécuter le script de parsing
-    const scriptPath = join(process.cwd(), "scripts", "parse-excel-v2.js");
+    const scriptPath = join(process.cwd(), "scripts", "parse-excel.js");
     const { stdout, stderr } = await execAsync(
       `node ${scriptPath} ${tempFilePath} ${join(process.cwd(), "data", "matches.json")}`
     );
