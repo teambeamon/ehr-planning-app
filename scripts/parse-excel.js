@@ -92,6 +92,20 @@ function normalizeTeamName(teamName) {
   cleaned = cleaned.replace(/^\s*[-–]\s*/, '');
   cleaned = cleaned.replace(/\s+/g, ' ').trim();
   cleaned = cleaned.replace(/\s+\(.*?\)\s*/g, '');
+  
+  // Si le nom contient "EHR" ou "HR", extraire seulement la partie EHR/HR
+  // Ex: "EHR 1 Homécourt" -> "EHR 1"
+  if (/\bEHR\b/i.test(cleaned) || /\bHR\b/i.test(cleaned)) {
+    const ehrMatch = cleaned.match(/\b(EHR[\s\-]?\d*|HR[\s\-]?\d*)\b/i);
+    if (ehrMatch) {
+      const ehrOnly = ehrMatch[1].replace(/\s+/g, ' ').trim();
+      const normalized = TEAM_NAME_MAPPING[ehrOnly] || ehrOnly;
+      if (normalized !== ehrOnly) {
+        return normalized;
+      }
+    }
+  }
+  
   return TEAM_NAME_MAPPING[cleaned] || cleaned;
 }
 
@@ -191,6 +205,9 @@ function parseMatchCell(cellStr, team, date, day, location) {
   }
   matchCleaned = cleanCellStr(matchCleaned);
   
+  // Supprimer les commentaires entre parenthèses
+  matchCleaned = matchCleaned.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+  
   // Déterminer home/away basé sur la position de EHR/HR dans le texte
   let homeTeam = null, awayTeam = null;
   let isHome = false, isAway = false;
@@ -241,7 +258,18 @@ function parseMatchCell(cellStr, team, date, day, location) {
     }
   } else {
     // Pas de séparateur, c'est l'adversaire
-    const opponent = cleanCellStr(matchCleaned);
+    let opponent = cleanCellStr(matchCleaned);
+    
+    // Si l'adversaire contient "EHR" ou "HR", c'est probablement une cellule avec plusieurs infos
+    // Ex: "EHR 1 Homécourt et Bousse" -> extraire "Homécourt et Bousse"
+    // On remplace EHR/HR et les chiffres qui suivent par rien
+    if (/\bEHR\b/i.test(opponent) || /\bHR\b/i.test(opponent)) {
+      // Remplacer "EHR" ou "HR" suivi éventuellement d'un nombre et d'un espace par rien
+      opponent = opponent.replace(/\bEHR\s*\d*\b/gi, '').replace(/\bHR\s*\d*\b/gi, '');
+      opponent = cleanCellStr(opponent);
+      // Supprimer les virgules au début
+      opponent = opponent.replace(/^\s*,\s*/, '');
+    }
     
     if (opponent.length >= 2 && !isNonMatchCell(opponent)) {
       // Vérifier si l'adversaire est EHR
