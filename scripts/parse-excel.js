@@ -52,7 +52,7 @@ function parseExcelFile(filePath) {
     
     // Déterminer le lieu par (row - 14) % 3
     const offset = row - 14;
-    const location = getLocationFromOffset(offset);
+    let location = getLocationFromOffset(offset);
     
     // Extraire les informations de camionnette depuis les colonnes 2 et 3
     let camionnette = null;
@@ -103,11 +103,18 @@ function parseExcelFile(filePath) {
         continue;
       }
       
+      // Déterminer le lieu pour cette cellule
+      // Si la cellule contient "Kanfen", le match a lieu à la salle de Kanfen
+      let cellLocation = location;
+      if (cellStr.toLowerCase().includes('kanfen')) {
+        cellLocation = 'Kanfen';
+      }
+      
       const team = teamMap.get(col) || null;
       const category = categoryMap.get(col) || null;
       const coach = coachMap.get(col) || null;
       
-      const matchInfo = parseMatchCell(cellStr, formattedDate, day, location, team, category, coach);
+      const matchInfo = parseMatchCell(cellStr, formattedDate, day, cellLocation, team, category, coach);
       
       if (matchInfo) {
         matchInfo.camionnette = camionnette;

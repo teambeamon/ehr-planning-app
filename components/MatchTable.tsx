@@ -12,17 +12,19 @@ const getLocationColor = (location: string | null, isHome: boolean | undefined) 
   
   const locationLower = location.toLowerCase();
   
-  if (locationLower.includes('rodemack')) {
+  // Salles EHR uniquement
+  if (locationLower.includes('kanfen')) {
+    return 'bg-orange-100 text-orange-800';
+  } else if (locationLower.includes('rodemack')) {
     return 'bg-yellow-100 text-yellow-800';
-  } else if (locationLower.includes('hettange') && locationLower.includes('hall')) {
-    return 'bg-blue-100 text-blue-800';
   } else if (locationLower.includes('hettange') && locationLower.includes('poly')) {
     return 'bg-green-100 text-green-800';
-  } else if (locationLower.includes('kanfen')) {
-    return 'bg-orange-100 text-orange-800';
+  } else if (locationLower.includes('hettange') && locationLower.includes('hall')) {
+    return 'bg-blue-100 text-blue-800';
   }
   
-  return 'bg-gray-100 text-gray-800';
+  // Pour les autres lieux (non-EHR), pas de couleur
+  return '';
 };
 
 // Fonction pour obtenir la couleur de fond de la ligne (uniquement pour les matchs à domicile)
@@ -31,14 +33,15 @@ const getLocationRowColor = (location: string | null) => {
   
   const locationLower = location.toLowerCase();
   
-  if (locationLower.includes('rodemack')) {
+  // Salles EHR uniquement
+  if (locationLower.includes('kanfen')) {
+    return 'bg-orange-50';
+  } else if (locationLower.includes('rodemack')) {
     return 'bg-yellow-50';
-  } else if (locationLower.includes('hettange') && locationLower.includes('hall')) {
-    return 'bg-blue-50';
   } else if (locationLower.includes('hettange') && locationLower.includes('poly')) {
     return 'bg-green-50';
-  } else if (locationLower.includes('kanfen')) {
-    return 'bg-orange-50';
+  } else if (locationLower.includes('hettange') && locationLower.includes('hall')) {
+    return 'bg-blue-50';
   }
   
   return '';

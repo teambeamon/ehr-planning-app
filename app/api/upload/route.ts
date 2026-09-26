@@ -264,10 +264,16 @@ function parseExcelData(data: any[][]): any[] {
       const cellStr = String(cellValue).trim();
       if (isNonMatchCell(cellStr)) continue;
       
+      // Déterminer le lieu pour cette cellule
+      let cellLocation = location;
+      if (cellStr.toLowerCase().includes('kanfen')) {
+        cellLocation = 'Kanfen';
+      }
+      
       const team = teamMap.get(col) || null;
       const category = categoryMap.get(col) || null;
       const coach = coachMap.get(col) || null;
-      const matchInfo = parseMatchCell(cellStr, formattedDate, day, location, team, category, coach);
+      const matchInfo = parseMatchCell(cellStr, formattedDate, day, cellLocation, team, category, coach);
       if (matchInfo) {
         matchInfo.camionnette = camionnette;
         matchInfo.original_column = col;
