@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import Navbar from "@/components/Navbar";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -17,7 +18,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr">
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        <Navbar />
+        <main className="min-h-screen bg-gray-50">{children}</main>
+        <footer className="bg-blue-800 text-white py-6">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <p className="text-blue-200">© 2026 Entente Hettange Rodemack. Tous droits réservés.</p>
+          </div>
+        </footer>
+      </body>
     </html>
   );
 }

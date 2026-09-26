@@ -16,6 +16,38 @@ type Match = {
   season: string | null;
 };
 
+// Fonction pour obtenir la couleur du badge de type
+const getMatchTypeColor = (type: string | null) => {
+  switch (type?.toLowerCase()) {
+    case 'amical':
+      return 'bg-yellow-100 text-yellow-800';
+    case 'tournoi':
+      return 'bg-blue-100 text-blue-800';
+    case 'coupe':
+      return 'bg-red-100 text-red-800';
+    default:
+      return 'bg-green-100 text-green-800';
+  }
+};
+
+// Fonction pour obtenir la couleur du badge de catégorie
+const getCategoryColor = (category: string | null) => {
+  if (!category) return 'bg-gray-100 text-gray-800';
+  
+  if (category.includes('Seniors')) {
+    return 'bg-blue-600 text-white';
+  } else if (category.includes('U17')) {
+    return 'bg-blue-500 text-white';
+  } else if (category.includes('U15')) {
+    return 'bg-blue-400 text-white';
+  } else if (category.includes('U13')) {
+    return 'bg-blue-300 text-blue-800';
+  } else if (category.includes('U11') || category.includes('U9')) {
+    return 'bg-yellow-400 text-yellow-900';
+  }
+  return 'bg-gray-100 text-gray-800';
+};
+
 export default function MatchTable() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,15 +96,70 @@ export default function MatchTable() {
   }, []);
 
   const columns: ColumnDef<Match>[] = [
-    { accessorKey: "date", header: "Date" },
-    { accessorKey: "day", header: "Jour" },
-    { accessorKey: "home_team", header: "Équipe à domicile" },
-    { accessorKey: "away_team", header: "Équipe à l'extérieur" },
-    { accessorKey: "time", header: "Heure" },
-    { accessorKey: "location", header: "Lieu" },
-    { accessorKey: "match_type", header: "Type de match" },
-    { accessorKey: "category", header: "Catégorie" },
-    { accessorKey: "season", header: "Saison" },
+    {
+      accessorKey: "date",
+      header: "Date",
+      cell: ({ getValue }) => {
+        const value = getValue() as string | null;
+        return value ? <span className="font-medium text-blue-700">{value}</span> : '-';
+      }
+    },
+    {
+      accessorKey: "day",
+      header: "Jour",
+      cell: ({ getValue }) => {
+        const value = getValue() as string | null;
+        return value ? <span className="text-gray-600">{value}</span> : '-';
+      }
+    },
+    {
+      accessorKey: "home_team",
+      header: "Équipe à domicile",
+      cell: ({ getValue }) => {
+        const value = getValue() as string | null;
+        return value ? <span className="font-semibold text-blue-800">{value}</span> : '-';
+      }
+    },
+    {
+      accessorKey: "away_team",
+      header: "Équipe à l'extérieur",
+      cell: ({ getValue }) => {
+        const value = getValue() as string | null;
+        return value ? <span className="text-gray-700">{value}</span> : '-';
+      }
+    },
+    {
+      accessorKey: "time",
+      header: "Heure",
+      cell: ({ getValue }) => {
+        const value = getValue() as string | null;
+        return value ? <span className="text-yellow-600 font-medium">{value}</span> : '-';
+      }
+    },
+    {
+      accessorKey: "location",
+      header: "Lieu",
+      cell: ({ getValue }) => {
+        const value = getValue() as string | null;
+        return value ? <span className="badge badge-blue">{value}</span> : '-';
+      }
+    },
+    {
+      accessorKey: "match_type",
+      header: "Type",
+      cell: ({ getValue }) => {
+        const value = getValue() as string | null;
+        return value ? <span className={`badge ${getMatchTypeColor(value)}`}>{value}</span> : '-';
+      }
+    },
+    {
+      accessorKey: "category",
+      header: "Catégorie",
+      cell: ({ getValue }) => {
+        const value = getValue() as string | null;
+        return value ? <span className={`badge ${getCategoryColor(value)}`}>{value}</span> : '-';
+      }
+    },
   ];
 
   const table = useReactTable({
@@ -91,7 +178,6 @@ export default function MatchTable() {
       ],
     },
     onColumnFiltersChange: (updaterOrValue: any) => {
-      // Gérer les deux cas : fonction ou valeur directe
       const currentFilters: any[] = typeof updaterOrValue === 'function' 
         ? updaterOrValue(table.getState().columnFilters) 
         : updaterOrValue;
@@ -130,77 +216,100 @@ export default function MatchTable() {
   }, [filters]);
 
   if (isLoading) {
-    return <div className="p-4">Chargement des matchs...</div>;
+    return (
+      <div className="text-center py-12">
+        <div className="w-16 h-16 bg-blue-500 rounded-full mx-auto mb-4 animate-pulse"></div>
+        <p className="text-blue-600 text-lg">Chargement des matchs...</p>
+      </div>
+    );
+  }
+
+  if (matches.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <div className="w-16 h-16 bg-yellow-100 rounded-full mx-auto mb-4 flex items-center justify-center">
+          <span className="text-2xl">⚠️</span>
+        </div>
+        <h3 className="text-xl font-semibold text-blue-800 mb-2">Aucun match trouvé</h3>
+        <p className="text-gray-600">
+          Essayez de modifier vos filtres ou upload un fichier Excel.
+        </p>
+      </div>
+    );
   }
 
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">Planning des Matchs</h1>
-      <div className="flex flex-wrap gap-4 mb-4">
-        <div className="flex items-center gap-2">
-          <label htmlFor="team" className="text-sm font-medium">Équipe</label>
-          <select 
-            id="team" 
-            value={filters.team} 
-            onChange={(e) => setFilters({ ...filters, team: e.target.value })} 
-            className="border rounded p-2"
-          >
-            <option value="">Toutes les équipes</option>
-            {teams.map((team) => (
-              <option key={team} value={team}>{team}</option>
-            ))}
-          </select>
+    <div className="space-y-6">
+      {/* Filtres */}
+      <div className="card">
+        <h3 className="text-lg font-semibold text-blue-800 mb-4">🔍 Filtres</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          <div>
+            <label className="form-label">Équipe</label>
+            <select 
+              value={filters.team} 
+              onChange={(e) => setFilters({ ...filters, team: e.target.value })}
+              className="form-input"
+            >
+              <option value="">Toutes les équipes</option>
+              {teams.map((team) => (
+                <option key={team} value={team}>{team}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="form-label">Lieu</label>
+            <select 
+              value={filters.location} 
+              onChange={(e) => setFilters({ ...filters, location: e.target.value })}
+              className="form-input"
+            >
+              <option value="">Tous les lieux</option>
+              {locations.map((location) => (
+                <option key={location} value={location}>{location}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="form-label">Catégorie</label>
+            <select 
+              value={filters.category} 
+              onChange={(e) => setFilters({ ...filters, category: e.target.value })}
+              className="form-input"
+            >
+              <option value="">Toutes les catégories</option>
+              {categories.map((category) => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="form-label">Saison</label>
+            <select 
+              value={filters.season} 
+              onChange={(e) => setFilters({ ...filters, season: e.target.value })}
+              className="form-input"
+            >
+              <option value="">Toutes les saisons</option>
+              {seasons.map((season) => (
+                <option key={season} value={season}>{season}</option>
+              ))}
+            </select>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <label htmlFor="location" className="text-sm font-medium">Lieu</label>
-          <select 
-            id="location" 
-            value={filters.location} 
-            onChange={(e) => setFilters({ ...filters, location: e.target.value })} 
-            className="border rounded p-2"
-          >
-            <option value="">Tous les lieux</option>
-            {locations.map((location) => (
-              <option key={location} value={location}>{location}</option>
-            ))}
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <label htmlFor="category" className="text-sm font-medium">Catégorie</label>
-          <select 
-            id="category" 
-            value={filters.category} 
-            onChange={(e) => setFilters({ ...filters, category: e.target.value })} 
-            className="border rounded p-2"
-          >
-            <option value="">Toutes les catégories</option>
-            {categories.map((category) => (
-              <option key={category} value={category}>{category}</option>
-            ))}
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <label htmlFor="season" className="text-sm font-medium">Saison</label>
-          <select 
-            id="season" 
-            value={filters.season} 
-            onChange={(e) => setFilters({ ...filters, season: e.target.value })} 
-            className="border rounded p-2"
-          >
-            <option value="">Toutes les saisons</option>
-            {seasons.map((season) => (
-              <option key={season} value={season}>{season}</option>
-            ))}
-          </select>
+        <div className="mt-4 text-sm text-gray-500">
+          {matches.length} matchs trouvés
         </div>
       </div>
-      <div className="border rounded-lg overflow-hidden">
+
+      {/* Tableau */}
+      <div className="table-container card">
         <table className="w-full">
-          <thead className="bg-gray-100">
+          <thead className="table-header">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="p-3 text-left">
+                  <th key={header.id} className="p-4 text-left font-semibold text-sm">
                     {flexRender(header.column.columnDef.header, header.getContext())}
                   </th>
                 ))}
@@ -209,9 +318,9 @@ export default function MatchTable() {
           </thead>
           <tbody>
             {table.getRowModel().rows.map((row) => (
-              <tr key={row.id} className="border-t">
+              <tr key={row.id} className="border-t border-blue-100">
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="p-3">
+                  <td key={cell.id} className="p-4">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}
