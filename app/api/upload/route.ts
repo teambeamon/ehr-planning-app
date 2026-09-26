@@ -4,39 +4,12 @@ import * as XLSX from "xlsx";
 import { writeFile } from "fs/promises";
 import { join } from "path";
 
-export async function POST(request: Request) {
-  try {
-    const formData = await request.formData();
-    const file = formData.get("file") as File;
-
-    if (!file) {
-      return NextResponse.json({ error: "Aucun fichier fourni." }, { status: 400 });
-    }
-
-    const arrayBuffer = await file.arrayBuffer();
-    const workbook = XLSX.read(arrayBuffer, { type: "array" });
-    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as unknown[][];
-
-    const matches = parseExcelData(jsonData);
-
-    // Write data to JSON file
-    const dataDir = join(process.cwd(), "data");
-    const filePath = join(dataDir, "matches.json");
-    await writeFile(filePath, JSON.stringify(matches, null, 2));
-
-    return NextResponse.json({ 
-      success: true, 
-      message: "Fichier traité avec succès.",
-      matchesCount: matches.length
-    });
-  } catch (error) {
-    console.error("Erreur lors du traitement du fichier :", error);
-    return NextResponse.json(
-      { error: "Erreur lors du traitement du fichier." },
-      { status: 500 }
-    );
-  }
+function getLocationFromColumn(col: number): string {
+  const offset = col - 5;
+  const mod = offset % 3;
+  if (mod === 0) return 'Hettange (Hall)';
+  if (mod === 1) return 'Hettange (Poly)';
+  return 'Rodemack';
 }
 
 function isNonMatchCell(str: string): boolean {
@@ -51,7 +24,8 @@ function isNonMatchCell(str: string): boolean {
     'réservation camionnettes', 'dispo salles',
     'match contre', 'uniquement', 'tournaments', 'tournoi',
     '(match', 'inversion', 'demande de report', 'refus',
-    'a placer', 'retrait', 'de france', 'de moselle'
+    'a placer', 'retrait', 'de france', 'de moselle',
+    'match', 'à placer'
   ];
   
   if (nonMatchIndicators.some(indicator => lower.includes(indicator))) {
@@ -79,30 +53,28 @@ function formatDate(dateStr: string | null): string | null {
   return dateStr;
 }
 
-function getLocationFromOffset(offset: number): string {
-  const mod = offset % 3;
-  if (mod === 0) return 'Hettange (Hall)';
-  if (mod === 1) return 'Hettange (Poly)';
-  return 'Rodemack';
-}
-
 function extractTime(cleaned: string): string | null {
-  const timeMatch = cleaned.match(/à\s*(\d{1,2}[h:]\d{2})/i);
+  const timeMatch = cleaned.match(/à\s*(\d{1,2}[h:][0-9]{2})/i);
   return timeMatch ? timeMatch[1] : null;
 }
 
 function cleanCellStr(str: string): string {
-  return str.replace(/\r/g, '').replace(/\n/g, ' ').trim().replace(/\s+/g, ' ');
+  let cleaned = str.replace(/\r/g, '').replace(/\n/g, ' ').trim();
+  cleaned = cleaned.replace(/\s+/g, ' ');
+  return cleaned;
 }
 
 function cleanTeamName(name: string): string {
   if (!name) return name;
-  let cleaned = name.trim().replace(/^\s*[-–]\s*/, '').replace(/\s+/g, ' ');
+  let cleaned = name.trim();
+  cleaned = cleaned.replace(/^\s*[-–]\s*/, '');
+  cleaned = cleaned.replace(/\s+/g, ' ');
   cleaned = cleaned.replace(/^\s*vs\s+/i, '').trim();
   cleaned = cleaned.replace(/\s+vs\s*$/i, '').trim();
   cleaned = cleaned.replace(/^\s*à\s+/i, '').trim();
   cleaned = cleaned.replace(/\s+à\s*$/i, '').trim();
-  return cleaned.replace(/\s+\(\s*\)/g, '');
+  cleaned = cleaned.replace(/\s+\(\s*\)/g, '');
+  return cleaned;
 }
 
 function parseMatchCell(
@@ -119,7 +91,7 @@ function parseMatchCell(
   
   const time = extractTime(cleaned);
   if (time) {
-    cleaned = cleaned.replace(/à\s*\d{1,2}[h:]\d{2}/i, '').trim();
+    cleaned = cleaned.replace(/à\s*\d{1,2}[h:][0-9]{2}/i, '').trim();
   } else {
     cleaned = cleaned.replace(/\s*à\s*/gi, ' ').trim();
   }
@@ -136,37 +108,41 @@ function parseMatchCell(
   }
   cleaned = cleanCellStr(cleaned);
   
-  const hasEHR = /\bEHR\b/.test(cleaned.toUpperCase());
-  if (cleaned.includes(' et ') || (cleaned.includes(',') && hasEHR)) {
-    return null;
-  }
+  const isEHRTeam = (name: string) => {
+    if (!name) return false;
+    const upper = name.toUpperCase().trim();
+    return upper === 'EHR' || upper === 'EHR 1' || upper === 'EHR 2' || /^EHR\s*\d*$/.test(upper);
+  };
   
   let homeTeam: string | null = null, awayTeam: string | null = null;
-  let isHome = false, isAway = false, isInternal = false;
+  let isHome = false, isAway = false;
   
   if (cleaned.includes(' - ') || cleaned.includes(' vs ')) {
     const separator = cleaned.includes(' vs ') ? ' vs ' : ' - ';
     const parts = cleaned.split(separator).map(p => cleanCellStr(p));
     if (parts.length >= 2) {
-      const t1 = cleanTeamName(parts[0]);
-      const t2 = cleanTeamName(parts.slice(1).join(separator).trim());
-      // Vérifier que c'est exactement EHR (pas juste une sous-chaîne comme "Behren")
-      const t1IsEHR = t1.toUpperCase().trim() === 'EHR' || t1.toUpperCase().trim() === 'EHR 1' || t1.toUpperCase().trim() === 'EHR 2' || t1.toUpperCase().match(/^EHR\s*\d*$/);
-      const t2IsEHR = t2.toUpperCase().trim() === 'EHR' || t2.toUpperCase().trim() === 'EHR 1' || t2.toUpperCase().trim() === 'EHR 2' || t2.toUpperCase().match(/^EHR\s*\d*$/);
+      let team1 = cleanTeamName(parts[0]);
+      let team2 = cleanTeamName(parts.slice(1).join(separator).trim());
       
-      if (t1IsEHR && !t2IsEHR) { homeTeam = team || t1; awayTeam = t2; isHome = true; }
-      else if (t2IsEHR && !t1IsEHR) { homeTeam = t1; awayTeam = team || t2; isAway = true; }
-      else if (t1IsEHR && t2IsEHR) { homeTeam = team || t1; awayTeam = t2; isHome = true; isAway = true; isInternal = true; }
-      else { homeTeam = t1; awayTeam = t2; }
+      const t1IsEHR = isEHRTeam(team1);
+      const t2IsEHR = isEHRTeam(team2);
+      
+      if (t1IsEHR && !t2IsEHR) { homeTeam = team || team1; awayTeam = team2; isHome = true; }
+      else if (t2IsEHR && !t1IsEHR) { homeTeam = team1; awayTeam = team || team2; isAway = true; }
+      else if (t1IsEHR && t2IsEHR) { homeTeam = team || team1; awayTeam = team2; isHome = true; isAway = true; }
+      else { homeTeam = team1; awayTeam = team2; }
       
       const matchDisplay = `${homeTeam} vs ${awayTeam}`;
-      return { date, day, home_team: homeTeam, away_team: awayTeam, match_display: matchDisplay, time, location,
+      const finalLocation = isHome ? location : null;
+      
+      return { date, day, home_team: homeTeam, away_team: awayTeam, match_display: matchDisplay, time, location: finalLocation,
                match_type: matchType, category: category || team, coach,
-               is_home: isHome, is_away: isAway, is_internal: isInternal, original_team: team };
+               is_home: isHome, is_away: isAway, is_internal: false, original_team: team };
     }
   }
   
-  const ehrExactMatch = cleaned.match(/\bEHR\b/i);
+  const ehrPattern = /\bEHR\s*\d*\b/i;
+  const ehrExactMatch = cleaned.match(ehrPattern);
   if (ehrExactMatch) {
     if (isNonMatchCell(cleaned)) return null;
     const ehrMatch = cleaned.match(/(EHR\s*\d*)/i);
@@ -181,12 +157,10 @@ function parseMatchCell(
   
   if (team) {
     const cleanedOpponent = cleanTeamName(cleaned);
-    // Vérifier si l'équipe de la colonne est EHR (match exact)
-    const teamIsEHR = team && (team.toUpperCase().trim() === 'EHR' || team.toUpperCase().trim() === 'EHR 1' || team.toUpperCase().trim() === 'EHR 2' || team.toUpperCase().match(/^EHR\s*\d*$/));
-    
-    // Validation supplémentaire : si le nom de l'adversaire est trop court ou suspect, ignorer
     if (cleanedOpponent.length < 2) return null;
     if (isNonMatchCell(cleanedOpponent)) return null;
+    
+    const teamIsEHR = isEHRTeam(team);
     
     if (teamIsEHR) {
       const matchDisplay = `${team} vs ${cleanedOpponent}`;
@@ -196,92 +170,121 @@ function parseMatchCell(
     } else {
       if (/^\d+$/.test(cleanedOpponent.trim())) return null;
       const matchDisplay = `${cleanedOpponent} vs ${team}`;
-      return { date, day, home_team: cleanedOpponent, away_team: team, match_display: matchDisplay, time, location,
+      return { date, day, home_team: cleanedOpponent, away_team: team, match_display: matchDisplay, time, location: null,
                match_type: matchType, category: category || team, coach,
                is_home: false, is_away: true, is_internal: false, original_team: team };
     }
   }
+  
   return null;
 }
 
-function parseExcelData(data: any[][]): any[] {
-  const matches: any[] = [];
-  const lastUpdated = data[0]?.[0]?.toString().replace('MAJ le ', '')?.trim() || null;
-  const season = data[0]?.[5]?.toString().trim() || 'SAISON 2026-2027';
+export async function POST(request: Request) {
+  try {
+    const formData = await request.formData();
+    const file = formData.get("file") as File;
 
-  const teamsRow = data[11] || [];
-  const categoriesRow = data[12] || [];
-  const coachesRow = data[13] || [];
+    if (!file) {
+      return NextResponse.json({ error: "Aucun fichier fourni." }, { status: 400 });
+    }
 
-  const teamMap = new Map<number, string>();
-  const categoryMap = new Map<number, string>();
-  const coachMap = new Map<number, string>();
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer, { type: "array" });
+    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as unknown[][];
 
-  for (let col = 5; col < Math.max(teamsRow.length, categoriesRow.length, coachesRow.length); col++) {
-    if (teamsRow[col]) {
-      let teamName = String(teamsRow[col]).trim().replace(/^\s*[-–]\s*/, '').replace(/\s+/g, ' ').trim();
-      teamMap.set(col, teamName);
+    // Extraire les métadonnées
+    const lastUpdated = jsonData[0]?.[0]?.toString().replace('MAJ le ', '')?.trim() || null;
+    const season = jsonData[0]?.[5]?.toString().trim() || 'SAISON 2026-2027';
+
+    const teamsRow = jsonData[11] || [];
+    const categoriesRow = jsonData[12] || [];
+    const coachesRow = jsonData[13] || [];
+
+    const teamMap = new Map<number, string>();
+    const categoryMap = new Map<number, string>();
+    const coachMap = new Map<number, string>();
+
+    for (let col = 5; col < Math.max(teamsRow.length, categoriesRow.length, coachesRow.length); col++) {
+      if (teamsRow[col]) {
+        let teamName = String(teamsRow[col]).trim().replace(/^\s*[-–]\s*/, '').replace(/\s+/g, ' ').trim();
+        teamMap.set(col, teamName);
+      }
+      if (categoriesRow[col]) {
+        let cat = String(categoriesRow[col]).trim().replace(/\r/g, '').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+        categoryMap.set(col, cat);
+      }
+      if (coachesRow[col]) {
+        coachMap.set(col, String(coachesRow[col]).trim());
+      }
     }
-    if (categoriesRow[col]) {
-      let cat = String(categoriesRow[col]).trim().replace(/\r/g, '').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-      categoryMap.set(col, cat);
+
+    const matches: any[] = [];
+    let currentDate: string | null = null, currentDay: string | null = null;
+
+    for (let row = 14; row < jsonData.length; row++) {
+      const rowData = jsonData[row] || [];
+
+      let camionnette: string | null = null;
+      for (const colIdx of [2, 3]) {
+        const val = rowData[colIdx] ? String(rowData[colIdx]).trim() : null;
+        if (val && !['Dispo Salles', 'Réservation camionnettes', 'N° 1', 'N° 2', 'Coach', 'Réservation camionnette'].includes(val)) {
+          camionnette = val; break;
+        }
+      }
+
+      let date: string | null = null, day: string | null = null;
+      const dateCell = rowData[4];
+      if (dateCell && String(dateCell).trim().includes('/')) {
+        const dateStr = String(dateCell).trim();
+        const [datePart, dayPart] = dateStr.split('\n');
+        date = datePart?.trim() || null; day = dayPart?.trim() || null;
+        currentDate = date; currentDay = day;
+      }
+      if (!date) { date = currentDate; day = currentDay; }
+      if (!date) continue;
+
+      const formattedDate = formatDate(date);
+      for (let col = 5; col < rowData.length; col++) {
+        const cellValue = rowData[col];
+        if (!cellValue || String(cellValue).trim() === '') continue;
+        const cellStr = String(cellValue).trim();
+        if (isNonMatchCell(cellStr)) continue;
+        
+        let cellLocation = getLocationFromColumn(col);
+        if (cellStr.toLowerCase().includes('kanfen')) {
+          cellLocation = 'Kanfen';
+        }
+        
+        const team = teamMap.get(col) || null;
+        const category = categoryMap.get(col) || null;
+        const coach = coachMap.get(col) || null;
+        const matchInfo = parseMatchCell(cellStr, formattedDate, day, cellLocation, team, category, coach);
+        if (matchInfo) {
+          matchInfo.camionnette = camionnette;
+          matchInfo.original_column = col;
+          matchInfo.season = season;
+          matchInfo.last_updated = lastUpdated;
+          matches.push(matchInfo);
+        }
+      }
     }
-    if (coachesRow[col]) {
-      coachMap.set(col, String(coachesRow[col]).trim());
-    }
+
+    // Write data to JSON file
+    const dataDir = join(process.cwd(), "data");
+    const filePath = join(dataDir, "matches.json");
+    await writeFile(filePath, JSON.stringify(matches, null, 2));
+
+    return NextResponse.json({ 
+      success: true, 
+      message: "Fichier traité avec succès.",
+      matchesCount: matches.length
+    });
+  } catch (error) {
+    console.error("Erreur lors du traitement du fichier :", error);
+    return NextResponse.json(
+      { error: "Erreur lors du traitement du fichier." },
+      { status: 500 }
+    );
   }
-
-  let currentDate: string | null = null, currentDay: string | null = null;
-  
-  for (let row = 14; row < data.length; row++) {
-    const rowData = data[row] || [];
-    const offset = row - 14;
-    const location = getLocationFromOffset(offset);
-    
-    let camionnette: string | null = null;
-    for (const colIdx of [2, 3]) {
-      const val = rowData[colIdx] ? String(rowData[colIdx]).trim() : null;
-      if (val && !['Dispo Salles', 'Réservation camionnettes', 'N° 1', 'N° 2', 'Coach'].includes(val)) {
-        camionnette = val; break;
-      }
-    }
-    
-    let date: string | null = null, day: string | null = null;
-    const dateCell = rowData[4];
-    if (dateCell && String(dateCell).trim().includes('/')) {
-      const dateStr = String(dateCell).trim();
-      const [datePart, dayPart] = dateStr.split('\n');
-      date = datePart?.trim() || null; day = dayPart?.trim() || null;
-      currentDate = date; currentDay = day;
-    }
-    if (!date) { date = currentDate; day = currentDay; }
-    if (!date) continue;
-    
-    const formattedDate = formatDate(date);
-    for (let col = 5; col < rowData.length; col++) {
-      const cellValue = rowData[col];
-      if (!cellValue || String(cellValue).trim() === '') continue;
-      const cellStr = String(cellValue).trim();
-      if (isNonMatchCell(cellStr)) continue;
-      
-      // Déterminer le lieu pour cette cellule
-      let cellLocation = location;
-      if (cellStr.toLowerCase().includes('kanfen')) {
-        cellLocation = 'Kanfen';
-      }
-      
-      const team = teamMap.get(col) || null;
-      const category = categoryMap.get(col) || null;
-      const coach = coachMap.get(col) || null;
-      const matchInfo = parseMatchCell(cellStr, formattedDate, day, cellLocation, team, category, coach);
-      if (matchInfo) {
-        matchInfo.camionnette = camionnette;
-        matchInfo.original_column = col;
-        matchInfo.season = season;
-        matchInfo.last_updated = lastUpdated;
-        matches.push(matchInfo);
-      }
-    }
-  }
-  return matches;
 }

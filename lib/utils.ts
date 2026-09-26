@@ -33,12 +33,22 @@ export const getFilteredMatches = (filters: {
   season?: string;
 }): Match[] => {
   return matchesData.filter((match: Match) => {
-    return (
-      (!filters.team || match.home_team === filters.team || match.away_team === filters.team) &&
-      (!filters.location || match.location === filters.location) &&
-      (!filters.category || match.category === filters.category) &&
-      (!filters.season || match.season === filters.season)
-    );
+    // Filtre par équipe (recherche dans home_team ou away_team, avec includes pour plus de flexibilité)
+    const teamFilterPass = !filters.team || 
+      (match.home_team && match.home_team.toLowerCase().includes(filters.team.toLowerCase())) ||
+      (match.away_team && match.away_team.toLowerCase().includes(filters.team.toLowerCase())) ||
+      (match.category && match.category.toLowerCase().includes(filters.team.toLowerCase()));
+    
+    // Filtre par lieu (correspondance exacte pour les salles EHR)
+    const locationFilterPass = !filters.location || match.location === filters.location;
+    
+    // Filtre par catégorie
+    const categoryFilterPass = !filters.category || match.category === filters.category;
+    
+    // Filtre par saison
+    const seasonFilterPass = !filters.season || match.season === filters.season;
+    
+    return teamFilterPass && locationFilterPass && categoryFilterPass && seasonFilterPass;
   });
 };
 
@@ -53,9 +63,13 @@ export const getTeams = (): string[] => {
 };
 
 export const getLocations = (): string[] => {
+  // Salles EHR uniquement
+  const ehrLocations = ['Hettange (Hall)', 'Hettange (Poly)', 'Rodemack', 'Kanfen'];
   const locationsSet = new Set<string>();
   matchesData.forEach((match: Match) => {
-    if (match.location) locationsSet.add(match.location);
+    if (match.location && ehrLocations.includes(match.location)) {
+      locationsSet.add(match.location);
+    }
   });
   return Array.from(locationsSet).sort();
 };
@@ -78,6 +92,9 @@ export const getSeasons = (): string[] => {
 
 // Statistiques
 export const getStats = () => {
+  // Salles EHR uniquement
+  const ehrLocations = ['Hettange (Hall)', 'Hettange (Poly)', 'Rodemack', 'Kanfen'];
+  
   const stats = {
     total: matchesData.length,
     home: matchesData.filter((m: Match) => m.is_home).length,
@@ -93,10 +110,31 @@ export const getStats = () => {
 
   matchesData.forEach((match: Match) => {
     if (match.home_team) stats.byTeam[match.home_team] = (stats.byTeam[match.home_team] || 0) + 1;
-    if (match.location) stats.byLocation[match.location] = (stats.byLocation[match.location] || 0) + 1;
+    // Filtrer uniquement les salles EHR
+    if (match.location && ehrLocations.includes(match.location)) {
+      stats.byLocation[match.location] = (stats.byLocation[match.location] || 0) + 1;
+    }
     if (match.category) stats.byCategory[match.category] = (stats.byCategory[match.category] || 0) + 1;
     if (match.match_type) stats.byMatchType[match.match_type] = (stats.byMatchType[match.match_type] || 0) + 1;
   });
 
   return stats;
+};
+
+// Statistiques pour les locations EHR uniquement
+export const getEHRLocationsStats = () => {
+  const ehrLocations = ['Hettange (Hall)', 'Hettange (Poly)', 'Rodemack', 'Kanfen'];
+  const homeMatches = matchesData.filter((m: Match) => m.is_home && m.location && ehrLocations.includes(m.location));
+  
+  const byLocation: Record<string, number> = {};
+  homeMatches.forEach((match: Match) => {
+    if (match.location) {
+      byLocation[match.location] = (byLocation[match.location] || 0) + 1;
+    }
+  });
+  
+  return {
+    byLocation,
+    totalHome: homeMatches.length
+  };
 };
