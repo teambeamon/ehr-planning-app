@@ -90,12 +90,17 @@ export default function MatchTable() {
         { id: "season", value: filters.season },
       ],
     },
-    onColumnFiltersChange: (filters) => {
+    onColumnFiltersChange: (updaterOrValue: any) => {
+      // Gérer les deux cas : fonction ou valeur directe
+      const currentFilters: any[] = typeof updaterOrValue === 'function' 
+        ? updaterOrValue(table.getState().columnFilters) 
+        : updaterOrValue;
+      
       const newFilters = {
-        team: filters.find((f) => f.id === "home_team" || f.id === "away_team")?.value || "",
-        location: filters.find((f) => f.id === "location")?.value || "",
-        category: filters.find((f) => f.id === "category")?.value || "",
-        season: filters.find((f) => f.id === "season")?.value || "",
+        team: currentFilters.find((f: any) => f.id === "home_team" || f.id === "away_team")?.value || "",
+        location: currentFilters.find((f: any) => f.id === "location")?.value || "",
+        category: currentFilters.find((f: any) => f.id === "category")?.value || "",
+        season: currentFilters.find((f: any) => f.id === "season")?.value || "",
       };
       setFilters(newFilters);
     },

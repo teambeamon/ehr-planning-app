@@ -10,7 +10,7 @@ Une application pour gérer le planning des matchs de l'Entente Hettange Rodemac
 
 ## Technologies
 - **Frontend** : Next.js (React), TanStack Table, Recharts, shadcn/ui.
-- **Backend** : Next.js API Routes, Turso (SQLite).
+- **Backend** : Next.js API Routes, Turso (via libSQL).
 - **Parsing Excel** : SheetJS.
 - **Hébergement** : Vercel.
 
