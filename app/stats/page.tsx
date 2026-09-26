@@ -3,18 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-
-type Match = {
-  date: string | null;
-  day: string | null;
-  home_team: string | null;
-  away_team: string | null;
-  time: string | null;
-  location: string | null;
-  match_type: string | null;
-  category: string | null;
-  season: string | null;
-};
+import { Match } from "@/lib/utils";
 
 // Couleurs EHR : Bleu et Jaune
 const COLORS = ['#1e40af', '#3b82f6', '#60a5fa', '#93c5fd', '#fbbf24', '#facc15', '#f59e0b', '#d97706'];

@@ -1,28 +1,51 @@
-// components/MatchTable.tsx
+// components/MatchTableNew.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { useReactTable, getCoreRowModel, getFilteredRowModel, getSortedRowModel, ColumnDef, flexRender } from "@tanstack/react-table";
+import { Home, Plane, Calendar, Clock, Users, Trophy, Bus } from "lucide-react";
+import { Match } from "@/lib/utils";
 
-type Match = {
-  date: string | null;
-  day: string | null;
-  home_team: string | null;
-  away_team: string | null;
-  time: string | null;
-  location: string | null;
-  match_type: string | null;
-  category: string | null;
-  season: string | null;
+// Fonction pour obtenir la couleur du lieu
+const getLocationColor = (location: string | null, isHome: boolean | undefined) => {
+  if (!location) return 'bg-gray-100 text-gray-800';
+  
+  const locationLower = location.toLowerCase();
+  
+  if (locationLower.includes('rodemack')) {
+    return 'bg-yellow-100 text-yellow-800';
+  } else if (locationLower.includes('hettange') && locationLower.includes('hall')) {
+    return 'bg-blue-100 text-blue-800';
+  } else if (locationLower.includes('hettange') && locationLower.includes('poly')) {
+    return 'bg-green-100 text-green-800';
+  } else if (locationLower.includes('kanfen')) {
+    return 'bg-orange-100 text-orange-800';
+  }
+  
+  return 'bg-gray-100 text-gray-800';
+};
+
+// Fonction pour obtenir l'icône du match
+const getMatchIcon = (isHome: boolean | undefined, isAway: boolean | undefined) => {
+  if (isHome && !isAway) {
+    return <Home className="w-4 h-4 text-blue-600" />;
+  } else if (isAway && !isHome) {
+    return <Plane className="w-4 h-4 text-yellow-600" />;
+  } else if (isHome && isAway) {
+    return <Users className="w-4 h-4 text-green-600" />;
+  }
+  return <Trophy className="w-4 h-4 text-gray-600" />;
 };
 
 // Fonction pour obtenir la couleur du badge de type
 const getMatchTypeColor = (type: string | null) => {
-  switch (type?.toLowerCase()) {
+  if (!type) return 'bg-gray-100 text-gray-800';
+  
+  switch (type.toLowerCase()) {
     case 'amical':
       return 'bg-yellow-100 text-yellow-800';
     case 'tournoi':
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-purple-100 text-purple-800';
     case 'coupe':
       return 'bg-red-100 text-red-800';
     default:
@@ -34,21 +57,53 @@ const getMatchTypeColor = (type: string | null) => {
 const getCategoryColor = (category: string | null) => {
   if (!category) return 'bg-gray-100 text-gray-800';
   
-  if (category.includes('Seniors')) {
+  const catLower = category.toLowerCase();
+  
+  if (catLower.includes('seniors')) {
     return 'bg-blue-600 text-white';
-  } else if (category.includes('U17')) {
+  } else if (catLower.includes('u17') || catLower.includes('-17')) {
     return 'bg-blue-500 text-white';
-  } else if (category.includes('U15')) {
-    return 'bg-blue-400 text-white';
-  } else if (category.includes('U13')) {
+  } else if (catLower.includes('u15') || catLower.includes('-15')) {
+    return 'bg-blue-400 text-blue-900';
+  } else if (catLower.includes('u13') || catLower.includes('-13')) {
     return 'bg-blue-300 text-blue-800';
-  } else if (category.includes('U11') || category.includes('U9')) {
+  } else if (catLower.includes('u11') || catLower.includes('u9') || catLower.includes('-11') || catLower.includes('-9')) {
     return 'bg-yellow-400 text-yellow-900';
   }
+  
   return 'bg-gray-100 text-gray-800';
 };
 
-export default function MatchTable() {
+// Formatage de la date pour affichage
+const formatDisplayDate = (date: string | null) => {
+  if (!date) return '-';
+  // Convertir YYYY-MM-DD en DD/MM/YYYY
+  const parts = date.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return date;
+};
+
+// Composant Badge réutilisable
+const Badge = ({ text, color }: { text: string; color: string }) => (
+  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${color}`}>
+    {text}
+  </span>
+);
+
+// Composant IconBadge pour domicile/extérieur
+const LocationBadge = ({ location, isHome, isAway }: { location: string | null; isHome?: boolean; isAway?: boolean }) => {
+  const color = getLocationColor(location, isHome);
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${color}`}>
+      {getMatchIcon(isHome, isAway)}
+      {location || 'N/A'}
+    </span>
+  );
+};
+
+export default function MatchTableNew() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [teams, setTeams] = useState<string[]>([]);
@@ -61,17 +116,19 @@ export default function MatchTable() {
     category: "",
     season: "",
   });
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setIsLoading(true);
-        const [matchesRes, teamsRes, locationsRes, categoriesRes, seasonsRes] = await Promise.all([
+        const [matchesRes, teamsRes, locationsRes, categoriesRes, seasonsRes, statsRes] = await Promise.all([
           fetch("/api/matches"),
           fetch("/api/teams"),
           fetch("/api/locations"),
           fetch("/api/categories"),
           fetch("/api/seasons"),
+          fetch("/api/stats"),
         ]);
 
         const matchesData = await matchesRes.json();
@@ -79,12 +136,14 @@ export default function MatchTable() {
         const locationsData = await locationsRes.json();
         const categoriesData = await categoriesRes.json();
         const seasonsData = await seasonsRes.json();
+        const statsData = await statsRes.json();
 
         setMatches(matchesData);
         setTeams(teamsData);
         setLocations(locationsData);
         setCategories(categoriesData);
         setSeasons(seasonsData);
+        setLastUpdated(statsData?.lastUpdated || null);
       } catch (error) {
         console.error("Erreur lors de la récupération des données :", error);
       } finally {
@@ -98,10 +157,15 @@ export default function MatchTable() {
   const columns: ColumnDef<Match>[] = [
     {
       accessorKey: "date",
-      header: "Date",
+      header: () => (
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4" />
+          Date
+        </div>
+      ),
       cell: ({ getValue }) => {
         const value = getValue() as string | null;
-        return value ? <span className="font-medium text-blue-700">{value}</span> : '-';
+        return value ? <span className="font-medium text-blue-700">{formatDisplayDate(value)}</span> : '-';
       }
     },
     {
@@ -114,23 +178,50 @@ export default function MatchTable() {
     },
     {
       accessorKey: "home_team",
-      header: "Équipe à domicile",
-      cell: ({ getValue }) => {
-        const value = getValue() as string | null;
-        return value ? <span className="font-semibold text-blue-800">{value}</span> : '-';
+      header: () => (
+        <div className="flex items-center gap-2">
+          <Home className="w-4 h-4" />
+          Équipe à domicile
+        </div>
+      ),
+      cell: ({ row }) => {
+        const homeTeam = row.getValue('home_team') as string | null;
+        const isHome = row.getValue('is_home') as boolean | undefined;
+        const isAway = row.getValue('is_away') as boolean | undefined;
+        return homeTeam ? (
+          <span className={`font-semibold ${isHome && !isAway ? 'text-blue-800' : 'text-gray-700'}`}>
+            {homeTeam}
+          </span>
+        ) : '-';
       }
     },
     {
       accessorKey: "away_team",
-      header: "Équipe à l'extérieur",
-      cell: ({ getValue }) => {
-        const value = getValue() as string | null;
-        return value ? <span className="text-gray-700">{value}</span> : '-';
+      header: () => (
+        <div className="flex items-center gap-2">
+          <Plane className="w-4 h-4" />
+          Équipe à l'extérieur
+        </div>
+      ),
+      cell: ({ row }) => {
+        const value = row.getValue('away_team') as string | null;
+        const isAway = row.getValue('is_away') as boolean | undefined;
+        const isHome = row.getValue('is_home') as boolean | undefined;
+        return value ? (
+          <span className={`font-medium ${isAway && !isHome ? 'text-yellow-700' : 'text-gray-700'}`}>
+            {value}
+          </span>
+        ) : '-';
       }
     },
     {
       accessorKey: "time",
-      header: "Heure",
+      header: () => (
+        <div className="flex items-center gap-2">
+          <Clock className="w-4 h-4" />
+          Heure
+        </div>
+      ),
       cell: ({ getValue }) => {
         const value = getValue() as string | null;
         return value ? <span className="text-yellow-600 font-medium">{value}</span> : '-';
@@ -138,10 +229,17 @@ export default function MatchTable() {
     },
     {
       accessorKey: "location",
-      header: "Lieu",
-      cell: ({ getValue }) => {
-        const value = getValue() as string | null;
-        return value ? <span className="badge badge-blue">{value}</span> : '-';
+      header: () => (
+        <div className="flex items-center gap-2">
+          <Trophy className="w-4 h-4" />
+          Lieu
+        </div>
+      ),
+      cell: ({ row }) => {
+        const location = row.getValue('location') as string | null;
+        const isHome = row.getValue('is_home') as boolean | undefined;
+        const isAway = row.getValue('is_away') as boolean | undefined;
+        return <LocationBadge location={location} isHome={isHome} isAway={isAway} />;
       }
     },
     {
@@ -149,7 +247,7 @@ export default function MatchTable() {
       header: "Type",
       cell: ({ getValue }) => {
         const value = getValue() as string | null;
-        return value ? <span className={`badge ${getMatchTypeColor(value)}`}>{value}</span> : '-';
+        return value ? <Badge text={value} color={getMatchTypeColor(value)} /> : '-';
       }
     },
     {
@@ -157,7 +255,22 @@ export default function MatchTable() {
       header: "Catégorie",
       cell: ({ getValue }) => {
         const value = getValue() as string | null;
-        return value ? <span className={`badge ${getCategoryColor(value)}`}>{value}</span> : '-';
+        return value ? <Badge text={value} color={getCategoryColor(value)} /> : '-';
+      }
+    },
+    {
+      accessorKey: "camionnette",
+      header: () => (
+        <div className="flex items-center gap-2">
+          <Bus className="w-4 h-4" />
+          Camionnette
+        </div>
+      ),
+      cell: ({ getValue }) => {
+        const value = getValue() as string | null;
+        return value ? (
+          <span className="text-xs text-green-700 font-medium">{value}</span>
+        ) : '-';
       }
     },
   ];
@@ -218,7 +331,9 @@ export default function MatchTable() {
   if (isLoading) {
     return (
       <div className="text-center py-12">
-        <div className="w-16 h-16 bg-blue-500 rounded-full mx-auto mb-4 animate-pulse"></div>
+        <div className="w-16 h-16 bg-blue-500 rounded-full mx-auto mb-4 animate-pulse flex items-center justify-center">
+          <span className="text-2xl text-white">⏳</span>
+        </div>
         <p className="text-blue-600 text-lg">Chargement des matchs...</p>
       </div>
     );
@@ -240,16 +355,25 @@ export default function MatchTable() {
 
   return (
     <div className="space-y-6">
-      {/* Filtres */}
+      {/* En-tête avec date de dernière mise à jour */}
       <div className="card">
-        <h3 className="text-lg font-semibold text-blue-800 mb-4">🔍 Filtres</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <h3 className="text-lg font-semibold text-blue-800">🔍 Filtres</h3>
+          {lastUpdated && (
+            <div className="text-sm text-gray-500 bg-blue-50 p-2 rounded">
+              <Calendar className="w-4 h-4 inline mr-1" />
+              Dernière mise à jour: {formatDisplayDate(lastUpdated)}
+            </div>
+          )}
+        </div>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-4">
           <div>
-            <label className="form-label">Équipe</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Équipe</label>
             <select 
               value={filters.team} 
               onChange={(e) => setFilters({ ...filters, team: e.target.value })}
-              className="form-input"
+              className="w-full p-2 border border-blue-200 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">Toutes les équipes</option>
               {teams.map((team) => (
@@ -258,11 +382,11 @@ export default function MatchTable() {
             </select>
           </div>
           <div>
-            <label className="form-label">Lieu</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Lieu</label>
             <select 
               value={filters.location} 
               onChange={(e) => setFilters({ ...filters, location: e.target.value })}
-              className="form-input"
+              className="w-full p-2 border border-blue-200 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">Tous les lieux</option>
               {locations.map((location) => (
@@ -271,11 +395,11 @@ export default function MatchTable() {
             </select>
           </div>
           <div>
-            <label className="form-label">Catégorie</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie</label>
             <select 
               value={filters.category} 
               onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-              className="form-input"
+              className="w-full p-2 border border-blue-200 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">Toutes les catégories</option>
               {categories.map((category) => (
@@ -284,11 +408,11 @@ export default function MatchTable() {
             </select>
           </div>
           <div>
-            <label className="form-label">Saison</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Saison</label>
             <select 
               value={filters.season} 
               onChange={(e) => setFilters({ ...filters, season: e.target.value })}
-              className="form-input"
+              className="w-full p-2 border border-blue-200 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">Toutes les saisons</option>
               {seasons.map((season) => (
@@ -297,19 +421,20 @@ export default function MatchTable() {
             </select>
           </div>
         </div>
-        <div className="mt-4 text-sm text-gray-500">
+        
+        <div className="mt-4 text-sm text-gray-500 bg-blue-50 p-2 rounded">
           {matches.length} matchs trouvés
         </div>
       </div>
 
       {/* Tableau */}
-      <div className="table-container card">
+      <div className="card overflow-x-auto">
         <table className="w-full">
-          <thead className="table-header">
+          <thead className="bg-blue-600 text-white">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="p-4 text-left font-semibold text-sm">
+                  <th key={header.id} className="p-3 text-left font-semibold text-sm whitespace-nowrap">
                     {flexRender(header.column.columnDef.header, header.getContext())}
                   </th>
                 ))}
@@ -318,9 +443,9 @@ export default function MatchTable() {
           </thead>
           <tbody>
             {table.getRowModel().rows.map((row) => (
-              <tr key={row.id} className="border-t border-blue-100">
+              <tr key={row.id} className="border-t border-blue-100 hover:bg-blue-50 transition-colors">
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="p-4">
+                  <td key={cell.id} className="p-3 whitespace-nowrap">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}
