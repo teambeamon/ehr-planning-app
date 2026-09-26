@@ -212,7 +212,8 @@ export default function MatchTableNew() {
         if (!matchDisplay) return '-';
         
         // Déterminer la couleur du badge selon le lieu (uniquement pour les matchs à domicile)
-        const locationColor = isHome ? getLocationColor(location, isHome) : 'bg-gray-100 text-gray-800';
+        // Pour les matchs à l'extérieur, pas de couleur de fond (blanc)
+        const locationColor = isHome ? getLocationColor(location, isHome) : '';
         const icon = getMatchIcon(isHome, isAway);
         
         return (
