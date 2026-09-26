@@ -110,8 +110,11 @@ export const getStats = () => {
     lastUpdated: matchesData.length > 0 && matchesData[0].last_updated ? matchesData[0].last_updated : null
   };
 
+  // Compter uniquement les matchs EHR (domicile) pour les stats par équipe
   matchesData.forEach((match: Match) => {
-    if (match.home_team) stats.byTeam[match.home_team] = (stats.byTeam[match.home_team] || 0) + 1;
+    if (match.is_home && match.home_team) {
+      stats.byTeam[match.home_team] = (stats.byTeam[match.home_team] || 0) + 1;
+    }
     // Filtrer uniquement les salles EHR
     if (match.location && ehrLocations.includes(match.location)) {
       stats.byLocation[match.location] = (stats.byLocation[match.location] || 0) + 1;
@@ -139,4 +142,33 @@ export const getEHRLocationsStats = () => {
     byLocation,
     totalHome: homeMatches.length
   };
+};
+
+// Fonction pour obtenir les matchs du week-end actuel
+export const getWeekendMatches = (): Match[] => {
+  const now = new Date();
+  // Trouver le samedi de la semaine actuelle
+  const saturday = new Date(now);
+  saturday.setDate(now.getDate() + (6 - now.getDay()));
+  saturday.setHours(0, 0, 0, 0);
+  
+  // Trouver le dimanche de la semaine actuelle
+  const sunday = new Date(saturday);
+  sunday.setDate(saturday.getDate() + 1);
+  
+  // Formater les dates en YYYY-MM-DD
+  const formatDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  
+  const saturdayStr = formatDate(saturday);
+  const sundayStr = formatDate(sunday);
+  
+  // Filtrer les matchs du week-end
+  return matchesData.filter((match: Match) => {
+    return match.date === saturdayStr || match.date === sundayStr;
+  });
 };

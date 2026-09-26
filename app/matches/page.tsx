@@ -1,5 +1,6 @@
 // app/matches/page.tsx
 import MatchTable from "@/components/MatchTable";
+import WeekendMatches from "@/components/WeekendMatches";
 import Link from "next/link";
 
 export default function MatchesPage() {
@@ -20,6 +21,10 @@ export default function MatchesPage() {
         </Link>
       </div>
       
+      {/* Matchs du Week-End - Bien visibles en haut */}
+      <WeekendMatches />
+      
+      {/* Tableau complet des matchs */}
       <div className="card animate-fade-in" style={{ animationDelay: '0.1s' }}>
         <MatchTable />
       </div>
