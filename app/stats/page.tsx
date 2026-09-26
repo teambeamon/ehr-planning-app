@@ -30,11 +30,28 @@ export default function StatsPage() {
   }, []);
 
   // Calculer les statistiques
+  // Liste des équipes EHR
+  const ehrTeams = new Set([
+    'Seniors M', 'Seniors F1', 'Seniors F2',
+    'M17 departementale', 'M17 region',
+    'F17 CDF', 'F17 departementale',
+    'M15 region', 'M15 departementale',
+    'F15 region', 'F15 departementale',
+    'M13 region', 'M13 departementale',
+    'F13 departementale',
+    'M11 interdepartementale',
+    'F11 departementale'
+  ]);
+
   const getTeamStats = () => {
     const teamCounts: Record<string, number> = {};
     matches.forEach((match) => {
-      if (match.home_team) {
+      // Ne compter que les équipes EHR (home_team ou away_team)
+      if (match.home_team && ehrTeams.has(match.home_team)) {
         teamCounts[match.home_team] = (teamCounts[match.home_team] || 0) + 1;
+      }
+      if (match.away_team && ehrTeams.has(match.away_team) && match.is_away) {
+        teamCounts[match.away_team] = (teamCounts[match.away_team] || 0) + 1;
       }
     });
     return Object.entries(teamCounts)
@@ -65,7 +82,8 @@ export default function StatsPage() {
   const getCategoryStats = () => {
     const categoryCounts: Record<string, number> = {};
     matches.forEach((match) => {
-      if (match.category) {
+      // Ne compter que les catégories des équipes EHR
+      if (match.category && (ehrTeams.has(match.home_team || '') || ehrTeams.has(match.away_team || ''))) {
         categoryCounts[match.category] = (categoryCounts[match.category] || 0) + 1;
       }
     });

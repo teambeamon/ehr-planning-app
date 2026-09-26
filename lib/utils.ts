@@ -52,14 +52,30 @@ export const getFilteredMatches = (filters: {
   });
 };
 
+// Liste des équipes EHR
+const EHR_TEAM_NAMES = new Set([
+  'Seniors M', 'Seniors F1', 'Seniors F2',
+  'M17 departementale', 'M17 region',
+  'F17 CDF', 'F17 departementale',
+  'M15 region', 'M15 departementale',
+  'F15 region', 'F15 departementale',
+  'M13 region', 'M13 departementale',
+  'F13 departementale',
+  'M11 interdepartementale',
+  'F11 departementale'
+]);
+
 // Fonctions utilitaires pour extraire les valeurs uniques
 export const getTeams = (): string[] => {
-  // Ne retourner que les équipes EHR (celles qui jouent à domicile ou à l'extérieur)
-  // Les équipes EHR sont celles qui ont is_home=true ou is_away=true
+  // Ne retourner que les équipes EHR
   const ehrTeamsSet = new Set<string>();
   matchesData.forEach((match: Match) => {
-    if (match.is_home && match.home_team) ehrTeamsSet.add(match.home_team);
-    if (match.is_away && match.away_team) ehrTeamsSet.add(match.away_team);
+    if (match.is_home && match.home_team && EHR_TEAM_NAMES.has(match.home_team)) {
+      ehrTeamsSet.add(match.home_team);
+    }
+    if (match.is_away && match.away_team && EHR_TEAM_NAMES.has(match.away_team)) {
+      ehrTeamsSet.add(match.away_team);
+    }
   });
   return Array.from(ehrTeamsSet).sort();
 };
