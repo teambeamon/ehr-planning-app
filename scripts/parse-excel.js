@@ -145,18 +145,10 @@ function parseExcelFile(filePath) {
         
         const blockRowData = jsonData[currentRow] || [];
         
-        // Déterminer la salle selon l'offset dans le bloc
-        // offset 0 = Rodemack (jaune)
-        // offset 1 = Hettange (Hall) (bleu)
-        // offset 2 = Hettange (Poly) (vert)
-        let cellLocation;
-        if (offset === 0) {
-          cellLocation = 'Rodemack';
-        } else if (offset === 1) {
-          cellLocation = 'Hettange (Hall)';
-        } else {
-          cellLocation = 'Hettange (Poly)';
-        }
+        // Déterminer la salle pour le bloc entier
+        // Toutes les lignes d'un bloc de 3 lignes ont la même salle (même couleur)
+        // La salle est déterminée par la première ligne du bloc : (startRow - 12) % 3
+        let cellLocation = getLocationFromRow(row);
         
         // Extraire les informations de camionnette depuis les colonnes 2 et 3
         let camionnette = null;
@@ -215,6 +207,15 @@ function parseExcelFile(filePath) {
   }
   
   return matches;
+}
+
+function getLocationFromRow(row) {
+  const offset = row - 12;
+  const mod = offset % 3;
+  
+  if (mod === 0) return 'Hettange (Hall)';
+  if (mod === 1) return 'Hettange (Poly)';
+  return 'Rodemack';
 }
 
 function formatDate(dateStr) {
