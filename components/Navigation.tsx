@@ -37,6 +37,17 @@ export default function Navigation() {
             </Link>
 
             <Link
+              href="/planning"
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                isActive("/planning")
+                  ? "bg-white text-blue-700"
+                  : "text-white hover:bg-white/20"
+              }`}
+            >
+              Calendrier
+            </Link>
+
+            <Link
               href="/matches"
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 isActive("/matches")
@@ -44,7 +55,7 @@ export default function Navigation() {
                   : "text-white hover:bg-white/20"
               }`}
             >
-              Planning
+              Tous les matchs
             </Link>
 
             <Link

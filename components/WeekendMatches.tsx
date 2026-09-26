@@ -65,13 +65,30 @@ export default function WeekendMatches() {
         const allMatches = await response.json();
         
         // Obtenir les dates du week-end actuel
+        // Tant que le dimanche n'est pas passé, on reste sur le week-end actuel
         const now = new Date();
-        const saturday = new Date(now);
-        saturday.setDate(now.getDate() + (6 - now.getDay()));
-        saturday.setHours(0, 0, 0, 0);
+        now.setHours(0, 0, 0, 0);
         
-        const sunday = new Date(saturday);
-        sunday.setDate(saturday.getDate() + 1);
+        let saturday: Date, sunday: Date;
+        
+        // Si aujourd'hui est samedi (6) ou dimanche (0)
+        if (now.getDay() === 6) {
+          // Samedi: week-end = aujourd'hui + demain
+          saturday = new Date(now);
+          sunday = new Date(now);
+          sunday.setDate(now.getDate() + 1);
+        } else if (now.getDay() === 0) {
+          // Dimanche: week-end = hier + aujourd'hui
+          saturday = new Date(now);
+          saturday.setDate(now.getDate() - 1);
+          sunday = new Date(now);
+        } else {
+          // Lundi à vendredi: week-end = samedi/dimanche suivant
+          saturday = new Date(now);
+          saturday.setDate(now.getDate() + (6 - now.getDay()));
+          sunday = new Date(saturday);
+          sunday.setDate(saturday.getDate() + 1);
+        }
         
         const formatDate = (date: Date): string => {
           const year = date.getFullYear();
