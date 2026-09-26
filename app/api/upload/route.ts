@@ -133,7 +133,7 @@ function parseMatchCell(
       else { homeTeam = team1; awayTeam = team2; }
       
       const matchDisplay = `${homeTeam} vs ${awayTeam}`;
-      const finalLocation = isHome ? location : null;
+      const finalLocation = isHome ? location : "Extérieur";
       
       return { date, day, home_team: homeTeam, away_team: awayTeam, match_display: matchDisplay, time, location: finalLocation,
                match_type: matchType, category: category || team, coach,
@@ -170,7 +170,7 @@ function parseMatchCell(
     } else {
       if (/^\d+$/.test(cleanedOpponent.trim())) return null;
       const matchDisplay = `${cleanedOpponent} vs ${team}`;
-      return { date, day, home_team: cleanedOpponent, away_team: team, match_display: matchDisplay, time, location: null,
+      return { date, day, home_team: cleanedOpponent, away_team: team, match_display: matchDisplay, time, location: "Extérieur",
                match_type: matchType, category: category || team, coach,
                is_home: false, is_away: true, is_internal: false, original_team: team };
     }

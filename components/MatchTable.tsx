@@ -8,8 +8,9 @@ import { Match } from "@/lib/utils";
 
 // Fonction pour obtenir la couleur du lieu (pour les badges)
 const getLocationColor = (location: string | null, isHome: boolean | undefined, isAway: boolean | undefined) => {
-  // Pas de couleur pour les matchs à l'extérieur
+  // Pas de couleur pour les matchs à l'extérieur ou pour "Extérieur"
   if (isAway && !isHome) return '';
+  if (location === 'Extérieur') return '';
   
   if (!location) return '';
   
@@ -32,6 +33,7 @@ const getLocationColor = (location: string | null, isHome: boolean | undefined, 
 
 // Fonction pour obtenir la couleur de fond de la ligne (uniquement pour les matchs à domicile)
 const getLocationRowColor = (location: string | null) => {
+  if (location === 'Extérieur') return '';
   if (!location) return '';
   
   const locationLower = location.toLowerCase();
@@ -123,7 +125,7 @@ const LocationBadge = ({ location, isHome, isAway }: { location: string | null; 
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${color}`}>
       {getMatchIcon(isHome, isAway)}
-      {location || 'Extérieur'}
+      {location}
     </span>
   );
 };

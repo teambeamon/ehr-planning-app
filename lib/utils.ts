@@ -65,11 +65,11 @@ export const getTeams = (): string[] => {
 };
 
 export const getLocations = (): string[] => {
-  // Salles EHR uniquement
+  // Salles EHR + Extérieur
   const ehrLocations = ['Hettange (Hall)', 'Hettange (Poly)', 'Rodemack', 'Kanfen'];
   const locationsSet = new Set<string>();
   matchesData.forEach((match: Match) => {
-    if (match.location && ehrLocations.includes(match.location)) {
+    if (match.location && (ehrLocations.includes(match.location) || match.location === 'Extérieur')) {
       locationsSet.add(match.location);
     }
   });

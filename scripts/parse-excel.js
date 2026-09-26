@@ -256,7 +256,7 @@ function parseMatchCell(cellStr, date, day, location, team, category, coach) {
       }
       
       const matchDisplay = `${homeTeam} vs ${awayTeam}`;
-      const finalLocation = isHome ? location : null;
+      const finalLocation = isHome ? location : "Extérieur";
       
       return {
         date,
@@ -343,7 +343,7 @@ function parseMatchCell(cellStr, date, day, location, team, category, coach) {
         away_team: team,
         match_display: matchDisplay,
         time,
-        location: null,
+        location: "Extérieur",
         match_type: matchType,
         category: category || team,
         coach,
