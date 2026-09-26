@@ -5,7 +5,7 @@ import { writeFile } from "fs/promises";
 import { join } from "path";
 
 function getLocationFromColumn(col: number): string {
-  const offset = col - 5;
+  const offset = col - 4;
   const mod = offset % 3;
   if (mod === 0) return 'Hettange (Hall)';
   if (mod === 1) return 'Hettange (Poly)';

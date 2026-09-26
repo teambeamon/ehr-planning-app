@@ -124,7 +124,7 @@ function parseExcelFile(filePath) {
 }
 
 function getLocationFromColumn(col) {
-  const offset = col - 5;
+  const offset = col - 4;
   const mod = offset % 3;
   
   if (mod === 0) return 'Hettange (Hall)';
