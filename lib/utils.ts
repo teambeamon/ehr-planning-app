@@ -54,12 +54,14 @@ export const getFilteredMatches = (filters: {
 
 // Fonctions utilitaires pour extraire les valeurs uniques
 export const getTeams = (): string[] => {
-  const teamsSet = new Set<string>();
+  // Ne retourner que les équipes EHR (celles qui jouent à domicile ou à l'extérieur)
+  // Les équipes EHR sont celles qui ont is_home=true ou is_away=true
+  const ehrTeamsSet = new Set<string>();
   matchesData.forEach((match: Match) => {
-    if (match.home_team) teamsSet.add(match.home_team);
-    if (match.away_team) teamsSet.add(match.away_team);
+    if (match.is_home && match.home_team) ehrTeamsSet.add(match.home_team);
+    if (match.is_away && match.away_team) ehrTeamsSet.add(match.away_team);
   });
-  return Array.from(teamsSet).sort();
+  return Array.from(ehrTeamsSet).sort();
 };
 
 export const getLocations = (): string[] => {
