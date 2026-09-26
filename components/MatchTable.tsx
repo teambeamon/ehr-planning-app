@@ -7,8 +7,11 @@ import { Home, Plane, Calendar, Clock, Users, Trophy, Bus } from "lucide-react";
 import { Match } from "@/lib/utils";
 
 // Fonction pour obtenir la couleur du lieu (pour les badges)
-const getLocationColor = (location: string | null, isHome: boolean | undefined) => {
-  if (!location) return 'bg-gray-100 text-gray-800';
+const getLocationColor = (location: string | null, isHome: boolean | undefined, isAway: boolean | undefined) => {
+  // Pas de couleur pour les matchs à l'extérieur
+  if (isAway && !isHome) return '';
+  
+  if (!location) return '';
   
   const locationLower = location.toLowerCase();
   
@@ -116,11 +119,11 @@ const Badge = ({ text, color }: { text: string; color: string }) => (
 
 // Composant IconBadge pour domicile/extérieur
 const LocationBadge = ({ location, isHome, isAway }: { location: string | null; isHome?: boolean; isAway?: boolean }) => {
-  const color = getLocationColor(location, isHome);
+  const color = getLocationColor(location, isHome, isAway);
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${color}`}>
       {getMatchIcon(isHome, isAway)}
-      {location || 'N/A'}
+      {location || 'Extérieur'}
     </span>
   );
 };
@@ -216,7 +219,7 @@ export default function MatchTableNew() {
         
         // Déterminer la couleur du badge selon le lieu (uniquement pour les matchs à domicile)
         // Pour les matchs à l'extérieur, pas de couleur de fond (blanc)
-        const locationColor = isHome ? getLocationColor(location, isHome) : '';
+        const locationColor = isHome ? getLocationColor(location, isHome, isAway) : '';
         const icon = getMatchIcon(isHome, isAway);
         
         return (
