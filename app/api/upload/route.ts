@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
     const matches = parseExcelData(jsonData);
 
-    // Écrire les données dans un fichier JSON
+    // Write data to JSON file
     const dataDir = join(process.cwd(), "data");
     const filePath = join(dataDir, "matches.json");
     await writeFile(filePath, JSON.stringify(matches, null, 2));
@@ -41,34 +41,40 @@ export async function POST(request: Request) {
 
 function isNonMatchCell(str: string): boolean {
   if (!str) return true;
+  const lower = str.toLowerCase().trim();
+  const trimmed = str.trim();
   
-  const lower = str.toLowerCase();
   const nonMatchIndicators = [
-    'match ', 'tournoi', 'coupe', 'amical',
-    'journée', 'report', 'hall non dispo', 'dispo',
-    'réservation', 'n°', 'coach', 'date', 'salles',
-    'bad', 'non dispo', 'vs p2h', 'et ', ' , '
+    'journée', 'report', 'exempt',
+    'hall non dispo', 'dispo', 'réservation',
+    'n°', 'coach', 'date', 'salles', 'bad', 'non dispo',
+    'réservation camionnettes', 'dispo salles',
+    'match contre', 'uniquement', 'tournaments', 'tournoi',
+    '(match', 'inversion', 'demande de report', 'refus',
+    'a placer', 'retrait', 'de france', 'de moselle'
   ];
   
-  return nonMatchIndicators.some(indicator => lower.includes(indicator)) ||
-         str === 'JOURNÉE' || str === 'Report' || str === 'Hall Non Dispo' ||
-         str === 'Bad' || str === 'Non dispo' ||
-         lower.includes('dispo') || lower.includes('réservation') ||
-         lower.includes('n°') || lower.includes('coach') ||
-         lower.includes('salles') ||
-         (str.includes('vs') && str.includes(',')) || // Plusieurs matchs
-         (str.includes('et') && str.includes('h')); // Plusieurs horaires
+  if (nonMatchIndicators.some(indicator => lower.includes(indicator))) {
+    return true;
+  }
+  
+  const exactMatches = ['match', 'match contre ?'];
+  if (exactMatches.some(m => lower === m)) {
+    return true;
+  }
+  
+  if (lower === 'à' || lower === 'a') return true;
+  if (/^\d+$/.test(trimmed)) return true;
+  if (trimmed.startsWith('(') && trimmed.endsWith(')')) return true;
+  
+  return false;
 }
 
 function formatDate(dateStr: string | null): string | null {
   if (!dateStr) return null;
-  
   const parts = dateStr.split('/');
   if (parts.length === 3) {
-    const day = parts[0].padStart(2, '0');
-    const month = parts[1].padStart(2, '0');
-    const year = parts[2];
-    return `${year}-${month}-${day}`;
+    return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
   }
   return dateStr;
 }
@@ -80,6 +86,25 @@ function getLocationFromOffset(offset: number): string {
   return 'Rodemack';
 }
 
+function extractTime(cleaned: string): string | null {
+  const timeMatch = cleaned.match(/à\s*(\d{1,2}[h:]\d{2})/i);
+  return timeMatch ? timeMatch[1] : null;
+}
+
+function cleanCellStr(str: string): string {
+  return str.replace(/\r/g, '').replace(/\n/g, ' ').trim().replace(/\s+/g, ' ');
+}
+
+function cleanTeamName(name: string): string {
+  if (!name) return name;
+  let cleaned = name.trim().replace(/^\s*[-–]\s*/, '').replace(/\s+/g, ' ');
+  cleaned = cleaned.replace(/^\s*vs\s+/i, '').trim();
+  cleaned = cleaned.replace(/\s+vs\s*$/i, '').trim();
+  cleaned = cleaned.replace(/^\s*à\s+/i, '').trim();
+  cleaned = cleaned.replace(/\s+à\s*$/i, '').trim();
+  return cleaned.replace(/\s+\(\s*\)/g, '');
+}
+
 function parseMatchCell(
   cellStr: string,
   date: string | null,
@@ -89,136 +114,107 @@ function parseMatchCell(
   category: string | null,
   coach: string | null
 ): any {
-  let cleaned = cellStr.replace(/\r/g, '').replace(/\n/g, ' ').trim();
+  let cleaned = cleanCellStr(cellStr);
+  if (!cleaned || cleaned === '' || isNonMatchCell(cleaned)) return null;
   
-  if (!cleaned || cleaned === '' || isNonMatchCell(cleaned)) {
+  const time = extractTime(cleaned);
+  if (time) {
+    cleaned = cleaned.replace(/à\s*\d{1,2}[h:]\d{2}/i, '').trim();
+  } else {
+    cleaned = cleaned.replace(/\s*à\s*/gi, ' ').trim();
+  }
+  cleaned = cleanCellStr(cleaned);
+  
+  let matchType = 'Championnat';
+  const lowerCleaned = cleaned.toLowerCase();
+  if (lowerCleaned.includes('amical')) {
+    matchType = 'Amical'; cleaned = cleaned.replace(/amical/gi, '').trim();
+  } else if (lowerCleaned.includes('tournoi')) {
+    matchType = 'Tournoi'; cleaned = cleaned.replace(/tournoi/gi, '').trim();
+  } else if (lowerCleaned.includes('coupe')) {
+    matchType = 'Coupe'; cleaned = cleaned.replace(/coupe/gi, '').trim();
+  }
+  cleaned = cleanCellStr(cleaned);
+  
+  if (cleaned.includes(' et ') || (cleaned.includes(',') && cleaned.includes('EHR'))) {
     return null;
   }
-
-  let homeTeam: string | null = null;
-  let awayTeam: string | null = null;
-  let time: string | null = null;
-  let matchType = 'Championnat';
   
-  // Extract time
-  const timeMatch = cleaned.match(/à\s*(\d{1,2}h\d{2})/i);
-  if (timeMatch) {
-    time = timeMatch[1];
-    cleaned = cleaned.replace(/à\s*\d{1,2}h\d{2}/i, '').trim();
-  }
+  let homeTeam: string | null = null, awayTeam: string | null = null;
+  let isHome = false, isAway = false, isInternal = false;
   
-  // Detect match type
-  if (cleaned.toLowerCase().includes('amical')) {
-    matchType = 'Amical';
-    cleaned = cleaned.replace(/amical/gi, '').trim();
-  } else if (cleaned.toLowerCase().includes('tournoi')) {
-    matchType = 'Tournoi';
-    cleaned = cleaned.replace(/tournoi/gi, '').trim();
-  } else if (cleaned.toLowerCase().includes('coupe')) {
-    matchType = 'Coupe';
-    cleaned = cleaned.replace(/coupe/gi, '').trim();
-  }
-  
-  cleaned = cleaned.trim();
-  
-  // Détecter les équipes
-  if (cleaned.includes(' - ')) {
-    const parts = cleaned.split(' - ').map(p => p.trim());
-    
+  if (cleaned.includes(' - ') || cleaned.includes(' vs ')) {
+    const separator = cleaned.includes(' vs ') ? ' vs ' : ' - ';
+    const parts = cleaned.split(separator).map(p => cleanCellStr(p));
     if (parts.length >= 2) {
-      const team1 = parts[0];
-      const team2 = parts.slice(1).join(' - ');
+      const t1 = cleanTeamName(parts[0]);
+      const t2 = cleanTeamName(parts.slice(1).join(separator).trim());
+      const t1IsEHR = t1.toUpperCase().includes('EHR');
+      const t2IsEHR = t2.toUpperCase().includes('EHR');
       
-      const isHome = team1.toUpperCase().includes('EHR');
-      const isAway = team2.toUpperCase().includes('EHR');
-      const isInternal = isHome && isAway;
+      if (t1IsEHR && !t2IsEHR) { homeTeam = t1; awayTeam = t2; isHome = true; }
+      else if (t2IsEHR && !t1IsEHR) { homeTeam = t2; awayTeam = t1; isAway = true; }
+      else if (t1IsEHR && t2IsEHR) { homeTeam = t1; awayTeam = t2; isHome = true; isAway = true; isInternal = true; }
+      else { homeTeam = t1; awayTeam = t2; }
       
-      if (isHome && !isAway) {
-        homeTeam = team1;
-        awayTeam = team2;
-      } else if (isAway && !isHome) {
-        homeTeam = team2;
-        awayTeam = team1;
-      } else if (isInternal) {
-        homeTeam = team1;
-        awayTeam = team2;
-      } else {
-        homeTeam = team1;
-        awayTeam = team2;
-      }
-      
-      return {
-        date,
-        day,
-        home_team: homeTeam,
-        away_team: awayTeam,
-        time,
-        location,
-        match_type: matchType,
-        category,
-        coach,
-        is_home: isHome,
-        is_away: isAway,
-        is_internal: isInternal,
-        original_team: team,
-        camionnette: null,
-        season: '2026-2027',
-        last_updated: null
-      };
+      return { date, day, home_team: homeTeam, away_team: awayTeam, time, location,
+               match_type: matchType, category: category || team, coach,
+               is_home: isHome, is_away: isAway, is_internal: isInternal, original_team: team };
     }
   }
   
-  // Si pas de " - ", mais que c'est un nom d'adversaire
-  if (cleaned && !isNonMatchCell(cleaned)) {
-    const isHome = team && team.toUpperCase().includes('EHR');
-    const isAway = false;
-    const isInternal = false;
-    
-    return {
-      date,
-      day,
-      home_team: team || 'EHR',
-      away_team: cleaned,
-      time,
-      location,
-      match_type: matchType,
-      category,
-      coach,
-      is_home: isHome,
-      is_away: isAway,
-      is_internal: isInternal,
-      original_team: team,
-      camionnette: null,
-      season: '2026-2027',
-      last_updated: null
-    };
+  if (cleaned.toUpperCase().includes('EHR')) {
+    if (isNonMatchCell(cleaned)) return null;
+    const ehrMatch = cleaned.match(/(EHR\s*\d*)/i);
+    if (ehrMatch) {
+      return { date, day, home_team: ehrMatch[1], away_team: null, time, location,
+               match_type: matchType, category: category || team, coach,
+               is_home: true, is_away: false, is_internal: false, original_team: team };
+    }
   }
   
+  if (team) {
+    const cleanedOpponent = cleanTeamName(cleaned);
+    const teamIsEHR = team.toUpperCase().includes('EHR');
+    
+    // Validation supplémentaire : si le nom de l'adversaire est trop court ou suspect, ignorer
+    if (cleanedOpponent.length < 2) return null;
+    if (isNonMatchCell(cleanedOpponent)) return null;
+    
+    if (teamIsEHR) {
+      return { date, day, home_team: team, away_team: cleanedOpponent, time, location,
+               match_type: matchType, category: category || team, coach,
+               is_home: true, is_away: false, is_internal: false, original_team: team };
+    } else {
+      if (/^\d+$/.test(cleanedOpponent.trim())) return null;
+      return { date, day, home_team: cleanedOpponent, away_team: team, time, location,
+               match_type: matchType, category: category || team, coach,
+               is_home: false, is_away: true, is_internal: false, original_team: team };
+    }
+  }
   return null;
 }
 
 function parseExcelData(data: any[][]): any[] {
   const matches: any[] = [];
-  
-  // Extraire les métadonnées
   const lastUpdated = data[0]?.[0]?.toString().replace('MAJ le ', '')?.trim() || null;
-  
-  // Lignes d'en-tête (11 = équipes, 12 = catégories, 13 = coachs)
+  const season = data[0]?.[5]?.toString().trim() || 'SAISON 2026-2027';
+
   const teamsRow = data[11] || [];
   const categoriesRow = data[12] || [];
   const coachesRow = data[13] || [];
 
-  // Mapping colonne -> équipe, catégorie, coach
   const teamMap = new Map<number, string>();
   const categoryMap = new Map<number, string>();
   const coachMap = new Map<number, string>();
 
   for (let col = 5; col < Math.max(teamsRow.length, categoriesRow.length, coachesRow.length); col++) {
     if (teamsRow[col]) {
-      teamMap.set(col, String(teamsRow[col]).trim());
+      let teamName = String(teamsRow[col]).trim().replace(/^\s*[-–]\s*/, '').replace(/\s+/g, ' ').trim();
+      teamMap.set(col, teamName);
     }
     if (categoriesRow[col]) {
-      const cat = String(categoriesRow[col]).trim().replace(/\r/g, '').replace(/\n/g, ' ');
+      let cat = String(categoriesRow[col]).trim().replace(/\r/g, '').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
       categoryMap.set(col, cat);
     }
     if (coachesRow[col]) {
@@ -226,87 +222,51 @@ function parseExcelData(data: any[][]): any[] {
     }
   }
 
-  // Parser les matchs
-  let currentDate: string | null = null;
-  let currentDay: string | null = null;
+  let currentDate: string | null = null, currentDay: string | null = null;
   
   for (let row = 14; row < data.length; row++) {
     const rowData = data[row] || [];
-    
-    // Déterminer la salle par (row - 14) % 3
     const offset = row - 14;
     const location = getLocationFromOffset(offset);
     
-    // Vérifier les camionnettes (colonnes 2 et 3)
     let camionnette: string | null = null;
-    if (rowData[2]) {
-      const val = String(rowData[2]).trim();
-      if (val && val !== 'Dispo Salles' && val !== 'Réservation camionnettes' && val !== 'N° 1' && val !== 'N° 2') {
-        camionnette = val;
-      }
-    }
-    if (rowData[3] && !camionnette) {
-      const val = String(rowData[3]).trim();
-      if (val && val !== 'Dispo Salles' && val !== 'Réservation camionnettes' && val !== 'N° 1' && val !== 'N° 2') {
-        camionnette = val;
+    for (const colIdx of [2, 3]) {
+      const val = rowData[colIdx] ? String(rowData[colIdx]).trim() : null;
+      if (val && !['Dispo Salles', 'Réservation camionnettes', 'N° 1', 'N° 2', 'Coach'].includes(val)) {
+        camionnette = val; break;
       }
     }
     
-    // Lire la date depuis la colonne 4
-    let date: string | null = null;
-    let day: string | null = null;
+    let date: string | null = null, day: string | null = null;
     const dateCell = rowData[4];
     if (dateCell && String(dateCell).trim().includes('/')) {
       const dateStr = String(dateCell).trim();
       const [datePart, dayPart] = dateStr.split('\n');
-      date = datePart ? datePart.trim() : null;
-      day = dayPart ? dayPart.trim() : null;
-      currentDate = date;
-      currentDay = day;
+      date = datePart?.trim() || null; day = dayPart?.trim() || null;
+      currentDate = date; currentDay = day;
     }
+    if (!date) { date = currentDate; day = currentDay; }
+    if (!date) continue;
     
-    // Si pas de date dans la colonne 4, utiliser la date courante
-    if (!date && currentDate) {
-      date = currentDate;
-      day = currentDay;
-    }
-    
-    // Si on a une date, parser les matchs dans les colonnes 5+
-    if (date) {
-      const formattedDate = formatDate(date);
+    const formattedDate = formatDate(date);
+    for (let col = 5; col < rowData.length; col++) {
+      const cellValue = rowData[col];
+      if (!cellValue || String(cellValue).trim() === '') continue;
+      const cellStr = String(cellValue).trim();
+      if (isNonMatchCell(cellStr)) continue;
       
-      for (let col = 5; col < rowData.length; col++) {
-        const cellValue = rowData[col];
-        if (!cellValue || String(cellValue).trim() === '') {
-          continue;
-        }
-        
-        const cellStr = String(cellValue).trim();
-        
-        // Skip non-match cells
-        if (isNonMatchCell(cellStr)) {
-          continue;
-        }
-        
-        const team = teamMap.get(col) || null;
-        const category = categoryMap.get(col) || null;
-        const coach = coachMap.get(col) || null;
-        
-        const matchInfo = parseMatchCell(cellStr, formattedDate, day, location, team, category, coach);
-        
-        if (matchInfo) {
-          matchInfo.camionnette = camionnette;
-          matchInfo.original_column = col;
-          matches.push(matchInfo);
-        }
+      const team = teamMap.get(col) || null;
+      const category = categoryMap.get(col) || null;
+      const coach = coachMap.get(col) || null;
+      const matchInfo = parseMatchCell(cellStr, formattedDate, day, location, team, category, coach);
+      if (matchInfo) {
+        matchInfo.camionnette = camionnette;
+        matchInfo.original_column = col;
+        matchInfo.season = season;
+        matchInfo.last_updated = lastUpdated;
+        matches.push(matchInfo);
       }
     }
   }
-
-  // Ajouter la date de dernière mise à jour
-  matches.forEach(match => {
-    match.last_updated = lastUpdated;
-  });
-
   return matches;
 }

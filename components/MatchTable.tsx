@@ -6,7 +6,7 @@ import { useReactTable, getCoreRowModel, getFilteredRowModel, getSortedRowModel,
 import { Home, Plane, Calendar, Clock, Users, Trophy, Bus } from "lucide-react";
 import { Match } from "@/lib/utils";
 
-// Fonction pour obtenir la couleur du lieu
+// Fonction pour obtenir la couleur du lieu (pour les badges)
 const getLocationColor = (location: string | null, isHome: boolean | undefined) => {
   if (!location) return 'bg-gray-100 text-gray-800';
   
@@ -23,6 +23,25 @@ const getLocationColor = (location: string | null, isHome: boolean | undefined) 
   }
   
   return 'bg-gray-100 text-gray-800';
+};
+
+// Fonction pour obtenir la couleur de fond de la ligne (uniquement pour les matchs à domicile)
+const getLocationRowColor = (location: string | null) => {
+  if (!location) return '';
+  
+  const locationLower = location.toLowerCase();
+  
+  if (locationLower.includes('rodemack')) {
+    return 'bg-yellow-50';
+  } else if (locationLower.includes('hettange') && locationLower.includes('hall')) {
+    return 'bg-blue-50';
+  } else if (locationLower.includes('hettange') && locationLower.includes('poly')) {
+    return 'bg-green-50';
+  } else if (locationLower.includes('kanfen')) {
+    return 'bg-orange-50';
+  }
+  
+  return '';
 };
 
 // Fonction pour obtenir l'icône du match
@@ -442,15 +461,24 @@ export default function MatchTableNew() {
             ))}
           </thead>
           <tbody>
-            {table.getRowModel().rows.map((row) => (
-              <tr key={row.id} className="border-t border-blue-100 hover:bg-blue-50 transition-colors">
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="p-3 whitespace-nowrap">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {table.getRowModel().rows.map((row) => {
+              const isHome = row.getValue('is_home') as boolean | undefined;
+              const location = row.getValue('location') as string | null;
+              const locationColor = isHome ? getLocationRowColor(location) : '';
+              
+              return (
+                <tr 
+                  key={row.id} 
+                  className={`border-t border-blue-100 hover:bg-blue-50 transition-colors ${locationColor}`}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <td key={cell.id} className="p-3 whitespace-nowrap">
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
