@@ -1,8 +1,116 @@
-// scripts/parse-excel.js
-// Parser corrigé selon les spécifications de l'utilisateur
+// scripts/parse-excel-v2.js
+// Parser corrigé avec normalisation des noms d'équipes
 const XLSX = require('xlsx');
 const { writeFileSync } = require('fs');
 const { join } = require('path');
+
+// Mapping pour normaliser les noms d'équipes (après nettoyage)
+// Note: les espaces à l'intérieur des parenthèses sont conservés
+const teamNameMapping = {
+  "SENIORS HR": "Seniors M",
+  "SENIORS FILLES HR 1": "Seniors F1",
+  "SENIORS FILLES HR 2": "Seniors F2",
+  "17 ans G (Dépt)": "M17 departementale",
+  "17 ans F équip 1 ( CDF)": "F17 CDF",
+  "17 ans F équip 2 ( Dépt)": "F17 departementale",
+  "15 ans M (Région)": "M15 region",
+  "15 ans (Dépt)": "M15 departementale",
+  "15 ans F (Région)": "F15 region",
+  "15 ans F (Dépt)": "F15 departementale",
+  "13 ans M (Région)": "M13 region",
+  "13 ans M (Dépt)": "M13 departementale",
+  "13 ans F (Dépt)": "F13 departementale",
+  "11 ans Masculins (InterDépt)": "M11 interdepartementale",
+  "11 ans Féminines": "F11 departementale",
+  "Tournoi -9/-11 Petit terrain": "Tournoi -9/-11",
+  // Noms alternatifs
+  "EHR 1": "F17 CDF",  // À vérifier
+  "EHR 2": "F17 departementale",  // À vérifier
+  "EHR": "EHR"
+};
+
+// Mapping des catégories
+const categoryMapping = {
+  "Masc EHR Dépt": "Masc EHR Dépt",
+  "Féminines 1\r\nPré Nationale": "Féminines Pré Nationale",
+  "Masc EHR  -18G": "Masc EHR U18",
+  "Féminines HR 1\r\n Championnat de France Poule 9": "Féminines HR CDF Poule 9",
+  "Féminines HR 2\r\nDépartemental": "Féminines HR Départ",
+  " Masc -15G EHR 1\r\n": "Masc EHR U15 Région",
+  " Masc -15G EHR 2\r\nPoule": "Masc EHR U15 Départ",
+  "Féminines -15F EHR 1\r\nPoule 2": "Féminines EHR U15 Région",
+  "Féminines -15F EHR 2\r\n": "Féminines EHR U15 Départ",
+  " Masc-13G EHR 1\r\nPoule 3\r\n": "Masc EHR U13 Région",
+  " Masc-13G  EHR 2\r\nPoule 3": "Masc EHR U13 Départ",
+  "Féminines -13F EHR\r\nPoule 1": "Féminines EHR U13 Départ",
+  "Masculins -11G EHR 1\r\n": "Masc EHR U11 InterDépart",
+  "Masculins -11G EHR 2\r\n": "Masc EHR U11 InterDépart",
+  "Féminines -11 F EHR \r\n": "Féminines EHR U11",
+  "-9 -11 Petit terrain": "Tournoi -9/-11",
+  "Féminines EHR \r\n": "Féminines EHR"
+};
+
+// Fonction pour normaliser le nom d'une équipe
+function normalizeTeamName(teamName) {
+  if (!teamName) return teamName;
+  
+  // Nettoyer le nom (comme dans le parser principal)
+  let cleaned = String(teamName).trim();
+  cleaned = cleaned.replace(/^\s*[-–]\s*/, '');
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  
+  // Appliquer le mapping
+  return teamNameMapping[cleaned] || cleaned;
+}
+
+// Fonction pour normaliser la catégorie
+function normalizeCategory(category) {
+  if (!category) return category;
+  
+  let cleaned = String(category).trim();
+  cleaned = cleaned.replace(/\r/g, '').replace(/\n/g, ' ');
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  
+  return categoryMapping[cleaned] || cleaned;
+}
+
+// Fonction pour obtenir le nom simplifié d'une équipe (sans le préfixe)
+function getSimpleTeamName(teamName) {
+  if (!teamName) return teamName;
+  
+  let cleaned = String(teamName).trim();
+  cleaned = cleaned.replace(/^\s*[-–]\s*/, '');
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  
+  // Supprimer les numéros d'équipe (équip 1, équip 2, etc.)
+  cleaned = cleaned.replace(/\s*\(.*?\)/g, '').trim();
+  
+  // Extraire le type et la catégorie
+  const match = cleaned.match(/^(\d+)\s+ans\s+([MF])\s*(.*)/);
+  if (match) {
+    const age = match[1];
+    const gender = match[2] === 'M' ? 'M' : 'F';
+    const level = match[3].toLowerCase();
+    
+    if (level.includes('region') || level.includes('région')) {
+      return `${gender}${age} region`;
+    } else if (level.includes('dept') || level.includes('dépt') || level.includes('départemental')) {
+      return `${gender}${age} departementale`;
+    } else if (level.includes('inter')) {
+      return `${gender}${age} interdepartementale`;
+    }
+  }
+  
+  // Pour les seniors
+  if (cleaned.toLowerCase().includes('seniors')) {
+    if (cleaned.toLowerCase().includes('filles') || cleaned.toLowerCase().includes('féminines')) {
+      return cleaned.includes('1') ? 'Seniors F1' : cleaned.includes('2') ? 'Seniors F2' : 'Seniors F';
+    }
+    return 'Seniors M';
+  }
+  
+  return cleaned;
+}
 
 function parseExcelFile(filePath) {
   const workbook = XLSX.readFile(filePath);
@@ -25,18 +133,25 @@ function parseExcelFile(filePath) {
   const teamMap = new Map();
   const categoryMap = new Map();
   const coachMap = new Map();
+  const simpleTeamMap = new Map();
 
   for (let col = 5; col < Math.max(teamsRow.length, categoriesRow.length, coachesRow.length); col++) {
     if (teamsRow[col]) {
       let teamName = String(teamsRow[col]).trim();
       teamName = teamName.replace(/^\s*[-–]\s*/, '');
       teamName = teamName.replace(/\s+/g, ' ').trim();
-      teamMap.set(col, teamName);
+      
+      // Normaliser le nom
+      const normalizedName = normalizeTeamName(teamName);
+      const simpleName = getSimpleTeamName(teamName);
+      
+      teamMap.set(col, normalizedName);
+      simpleTeamMap.set(col, simpleName);
     }
     if (categoriesRow[col]) {
       let cat = String(categoriesRow[col]).trim().replace(/\r/g, '').replace(/\n/g, ' ');
       cat = cat.replace(/\s+/g, ' ').trim();
-      categoryMap.set(col, cat);
+      categoryMap.set(col, normalizeCategory(cat));
     }
     if (coachesRow[col]) {
       coachMap.set(col, String(coachesRow[col]).trim());
@@ -80,7 +195,7 @@ function parseExcelFile(filePath) {
     if (!date) {
       continue;
     }
-
+    
     const formattedDate = formatDate(date);
     
     // Parser les matchs dans les colonnes 5+
@@ -96,8 +211,8 @@ function parseExcelFile(filePath) {
         continue;
       }
       
-      // La salle est déterminée par la LIGNE, pas par la colonne !
-      // Pattern: (row - 12) % 3
+      // La salle est déterminée par la LIGNE (pattern basé sur les lignes)
+      // (row - 12) % 3:
       // 0 = Hettange (Hall)
       // 1 = Hettange (Poly)
       // 2 = Rodemack
@@ -109,10 +224,11 @@ function parseExcelFile(filePath) {
       }
       
       const team = teamMap.get(col) || null;
+      const simpleTeam = simpleTeamMap.get(col) || null;
       const category = categoryMap.get(col) || null;
       const coach = coachMap.get(col) || null;
       
-      const matchInfo = parseMatchCell(cellStr, formattedDate, day, cellLocation, team, category, coach);
+      const matchInfo = parseMatchCell(cellStr, formattedDate, day, cellLocation, team, simpleTeam, category, coach);
       
       if (matchInfo) {
         matchInfo.camionnette = camionnette;
@@ -134,11 +250,6 @@ function getLocationFromRow(row) {
   if (mod === 0) return 'Hettange (Hall)';
   if (mod === 1) return 'Hettange (Poly)';
   return 'Rodemack';
-}
-
-function getLocationFromColumn(col) {
-  // Keep for backward compatibility, but now using row-based detection
-  return 'Hettange (Hall)';
 }
 
 function isNonMatchCell(str) {
@@ -193,7 +304,7 @@ function cleanCellStr(str) {
   return cleaned;
 }
 
-function parseMatchCell(cellStr, date, day, location, team, category, coach) {
+function parseMatchCell(cellStr, date, day, location, team, simpleTeam, category, coach) {
   let cleaned = cleanCellStr(cellStr);
   
   if (!cleaned || cleaned === '' || isNonMatchCell(cleaned)) {
@@ -223,10 +334,25 @@ function parseMatchCell(cellStr, date, day, location, team, category, coach) {
   }
   cleaned = cleanCellStr(cleaned);
   
+  // Liste des noms normalisés qui sont des équipes EHR
+  const ehrTeamNames = new Set([
+    'Seniors M', 'Seniors F1', 'Seniors F2',
+    'M17 departementale', 'F17 CDF', 'F17 departementale',
+    'M15 region', 'M15 departementale', 'F15 region', 'F15 departementale',
+    'M13 region', 'M13 departementale', 'F13 departementale',
+    'M11 interdepartementale', 'F11 departementale'
+  ]);
+
+  // Déterminer si c'est un match à domicile ou à l'extérieur
   const isEHRTeam = (name) => {
     if (!name) return false;
-    const upper = name.toUpperCase().trim();
-    return upper === 'EHR' || upper === 'EHR 1' || upper === 'EHR 2' || /^EHR\s*\d*$/.test(upper);
+    // Accepter EHR, EHR 1, EHR 2, HR (comme dans SENIORS HR)
+    // Utiliser \b pour éviter de matcher "HREN", "HRA", etc.
+    if (/\bEHR\b/i.test(name) || /\bHR\b/i.test(name)) {
+      return true;
+    }
+    // Accepter les noms normalisés
+    return ehrTeamNames.has(name);
   };
   
   let homeTeam = null, awayTeam = null;
@@ -245,26 +371,36 @@ function parseMatchCell(cellStr, date, day, location, team, category, coach) {
       const t2IsEHR = isEHRTeam(team2);
       
       if (t1IsEHR && !t2IsEHR) {
-        homeTeam = team || team1;
+        // EHR est en premier, donc match à domicile
+        homeTeam = team || simpleTeam || team1;
         awayTeam = team2;
         isHome = true;
         isAway = false;
       } else if (t2IsEHR && !t1IsEHR) {
+        // EHR est en second, donc match à l'extérieur
         homeTeam = team1;
-        awayTeam = team || team2;
+        awayTeam = team || simpleTeam || team2;
         isHome = false;
         isAway = true;
       } else if (t1IsEHR && t2IsEHR) {
-        homeTeam = team || team1;
+        // Les deux sont EHR (match interne)
+        homeTeam = team || simpleTeam || team1;
         awayTeam = team2;
         isHome = true;
         isAway = true;
       } else {
-        homeTeam = team1;
-        awayTeam = team2;
+        // Aucun des deux n'est EHR, mais on a une équipe associée
+        if (team) {
+          homeTeam = team;
+          awayTeam = team1;
+          isHome = true;
+          isAway = false;
+        } else {
+          homeTeam = team1;
+          awayTeam = team2;
+        }
       }
       
-      const matchDisplay = `${homeTeam} vs ${awayTeam}`;
       const finalLocation = isHome ? location : "Extérieur";
       
       return {
@@ -272,7 +408,7 @@ function parseMatchCell(cellStr, date, day, location, team, category, coach) {
         day,
         home_team: homeTeam,
         away_team: awayTeam,
-        match_display: matchDisplay,
+        match_display: isHome ? `${homeTeam} vs ${awayTeam}` : `${homeTeam} vs ${awayTeam}`,
         time,
         location: finalLocation,
         match_type: matchType,
@@ -281,20 +417,22 @@ function parseMatchCell(cellStr, date, day, location, team, category, coach) {
         is_home: isHome,
         is_away: isAway,
         is_internal: false,
-        original_team: team
+        original_team: team,
+        simple_team: simpleTeam
       };
     }
   }
   
-  // Cas 2: Une seule équipe mentionnée
+  // Cas 2: Une seule équipe mentionnée (match à domicile par défaut)
   const ehrPattern = /\bEHR\s*\d*\b/i;
   const ehrExactMatch = cleaned.match(ehrPattern);
+  
   if (ehrExactMatch) {
     if (isNonMatchCell(cleaned)) return null;
     
     const ehrMatch = cleaned.match(/(EHR\s*\d*)/i);
     if (ehrMatch) {
-      const homeTeam = team || ehrMatch[1];
+      const homeTeam = team || simpleTeam || ehrMatch[1];
       const matchDisplay = homeTeam;
       return {
         date,
@@ -310,26 +448,29 @@ function parseMatchCell(cellStr, date, day, location, team, category, coach) {
         is_home: true,
         is_away: false,
         is_internal: false,
-        original_team: team
+        original_team: team,
+        simple_team: simpleTeam
       };
     }
   }
   
   // Cas 3: Match avec un adversaire sans EHR mentionnée
-  if (team) {
+  if (team || simpleTeam) {
     const cleanedOpponent = cleanTeamName(cleaned);
     
     if (cleanedOpponent.length < 2) return null;
     if (isNonMatchCell(cleanedOpponent)) return null;
     
-    const teamIsEHR = isEHRTeam(team);
+    const teamIsEHR = isEHRTeam(team || simpleTeam || '');
     
     if (teamIsEHR) {
-      const matchDisplay = `${team} vs ${cleanedOpponent}`;
+      // Notre équipe est EHR, donc match à domicile
+      const homeTeam = team || simpleTeam;
+      const matchDisplay = `${homeTeam} vs ${cleanedOpponent}`;
       return {
         date,
         day,
-        home_team: team,
+        home_team: homeTeam,
         away_team: cleanedOpponent,
         match_display: matchDisplay,
         time,
@@ -340,16 +481,18 @@ function parseMatchCell(cellStr, date, day, location, team, category, coach) {
         is_home: true,
         is_away: false,
         is_internal: false,
-        original_team: team
+        original_team: team,
+        simple_team: simpleTeam
       };
     } else {
+      // Notre équipe n'est pas EHR, mais c'est un match à l'extérieur
       if (/^\d+$/.test(cleanedOpponent.trim())) return null;
-      const matchDisplay = `${cleanedOpponent} vs ${team}`;
+      const matchDisplay = `${cleanedOpponent} vs ${team || simpleTeam}`;
       return {
         date,
         day,
         home_team: cleanedOpponent,
-        away_team: team,
+        away_team: team || simpleTeam,
         match_display: matchDisplay,
         time,
         location: "Extérieur",
@@ -359,7 +502,8 @@ function parseMatchCell(cellStr, date, day, location, team, category, coach) {
         is_home: false,
         is_away: true,
         is_internal: false,
-        original_team: team
+        original_team: team,
+        simple_team: simpleTeam
       };
     }
   }
@@ -372,12 +516,9 @@ function cleanTeamName(name) {
   if (!name) return name;
   let cleaned = name.trim();
   cleaned = cleaned.replace(/^\s*[-–]\s*/, '');
-  cleaned = cleaned.replace(/\s+/g, ' ');
-  cleaned = cleaned.replace(/^\s*vs\s+/i, '').trim();
-  cleaned = cleaned.replace(/\s+vs\s*$/i, '').trim();
-  cleaned = cleaned.replace(/^\s*à\s+/i, '').trim();
-  cleaned = cleaned.replace(/\s+à\s*$/i, '').trim();
-  cleaned = cleaned.replace(/\s+\(\s*\)/g, '');
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  // Ne pas supprimer "vs" ou "à" car ils sont déjà traités par le split
+  cleaned = cleaned.replace(/\s+(\(.*?\))\s*/g, '');
   return cleaned;
 }
 
@@ -398,6 +539,7 @@ try {
   
   const t = new Set(); matches.forEach(m => { if(m.home_team) t.add(m.home_team); if(m.away_team) t.add(m.away_team); });
   console.log(`Teams: ${t.size} unique teams`);
+  console.log('Team names:', Array.from(t).sort());
   
   const homeWithLocation = matches.filter(m => m.is_home && m.location);
   console.log(`\nMatches à domicile avec salle: ${homeWithLocation.length}`);
@@ -410,6 +552,12 @@ try {
   
   const awayWithoutLocation = matches.filter(m => m.is_away && !m.location);
   console.log(`Matches à l\'extérieur sans salle EHR: ${awayWithoutLocation.length}`);
+  
+  // Vérifier les équipes simples
+  const simpleTeams = new Set();
+  matches.forEach(m => { if(m.simple_team) simpleTeams.add(m.simple_team); });
+  console.log(`\nSimple team names: ${simpleTeams.size}`);
+  console.log('Simple teams:', Array.from(simpleTeams).sort());
   
   console.log('Saved to', outputFile);
 } catch (error) {

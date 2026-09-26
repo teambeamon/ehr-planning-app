@@ -3,28 +3,30 @@
 
 import { useState, useEffect } from "react";
 import { Match } from "@/lib/utils";
-import { Home, Plane, Calendar, Clock } from "lucide-react";
+import { Home, Plane, Calendar } from "lucide-react";
 
-// Fonction pour obtenir la couleur du lieu
-const getLocationColor = (location: string | null) => {
-  if (!location || location === 'Extérieur') return '';
+// Fonction pour obtenir la couleur du lieu (fond)
+const getLocationBgColor = (location: string | null, isHome: boolean | undefined) => {
+  // Pour les matchs à l'extérieur, fond blanc
+  if (!isHome) return 'bg-white';
+  if (!location) return 'bg-white';
   
   const locationLower = location.toLowerCase();
   
   if (locationLower.includes('kanfen')) {
-    return 'bg-orange-100 text-orange-800';
+    return 'bg-orange-50';
   } else if (locationLower.includes('rodemack')) {
-    return 'bg-yellow-100 text-yellow-800';
+    return 'bg-yellow-50';
   } else if (locationLower.includes('hettange') && locationLower.includes('poly')) {
-    return 'bg-green-100 text-green-800';
+    return 'bg-green-50';
   } else if (locationLower.includes('hettange') && locationLower.includes('hall')) {
-    return 'bg-blue-100 text-blue-800';
+    return 'bg-blue-50';
   }
   
-  return '';
+  return 'bg-white';
 };
 
-// Fonction pour obtenir l'icône du match
+// Fonction pour obtenir l'icône
 const getMatchIcon = (isHome: boolean | undefined, isAway: boolean | undefined) => {
   if (isHome && !isAway) {
     return <Home className="w-4 h-4 text-blue-600" />;
@@ -34,7 +36,7 @@ const getMatchIcon = (isHome: boolean | undefined, isAway: boolean | undefined) 
   return <Calendar className="w-4 h-4 text-gray-600" />;
 };
 
-// Formatage de la date pour affichage
+// Formatage de la date
 const formatDisplayDate = (date: string | null) => {
   if (!date) return '-';
   const parts = date.split('-');
@@ -46,61 +48,23 @@ const formatDisplayDate = (date: string | null) => {
 
 // Formatage de l'heure
 const formatTime = (time: string | null) => {
-  if (!time) return '-';
-  // Remplacer h par : pour un format standard
-  return time.replace(/h/g, ':').replace(/H/g, ':');
-};
-
-// Composant pour afficher un match du week-end
-const WeekendMatchItem = ({ match }: { match: Match }) => {
-  const locationColor = getLocationColor(match.location);
-  const icon = getMatchIcon(match.is_home, match.is_away);
-  
-  return (
-    <div className={`p-3 rounded-lg mb-3 border-2 ${match.is_home ? 'border-blue-300 bg-blue-50/50' : 'border-yellow-300 bg-yellow-50/50'}`}>
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-sm font-medium text-blue-700">
-          {formatDisplayDate(match.date)} - {match.day}
-        </span>
-        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
-          {formatTime(match.time)}
-        </span>
-      </div>
-      <div className="flex items-center gap-2">
-        {icon}
-        <span className="font-medium text-gray-800">
-          {match.home_team} vs {match.away_team}
-        </span>
-      </div>
-      <div className="flex items-center gap-2 mt-1">
-        <span className={`text-xs px-2 py-1 rounded-full ${locationColor || 'bg-gray-100 text-gray-600'}`}>
-          {match.location || 'Extérieur'}
-        </span>
-        {match.category && (
-          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
-            {match.category}
-          </span>
-        )}
-      </div>
-    </div>
-  );
+  if (!time) return '';
+  // Ajouter un espace entre l'heure et les minutes
+  return time.replace(/([0-9]{1,2})h([0-9]{2})/, '$1h $2');
 };
 
 export default function WeekendMatches() {
-  const [matches, setMatches] = useState<Match[]>([]);
+  const [weekendMatches, setWeekendMatches] = useState<Match[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [weekendDates, setWeekendDates] = useState<{saturday: string; sunday: string}>({saturday: '', sunday: ''});
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchWeekendMatches = async () => {
       try {
         setIsLoading(true);
+        const response = await fetch("/api/matches");
+        const allMatches = await response.json();
         
-        // Récupérer tous les matchs
-        const matchesRes = await fetch("/api/matches");
-        const allMatches = await matchesRes.json();
-        
-        // Calculer les dates du week-end
+        // Obtenir les dates du week-end actuel
         const now = new Date();
         const saturday = new Date(now);
         saturday.setDate(now.getDate() + (6 - now.getDay()));
@@ -119,61 +83,96 @@ export default function WeekendMatches() {
         const saturdayStr = formatDate(saturday);
         const sundayStr = formatDate(sunday);
         
-        setWeekendDates({saturday: saturdayStr, sunday: sundayStr});
-        
         // Filtrer les matchs du week-end
-        const weekendMatches = allMatches.filter((match: Match) => 
-          match.date === saturdayStr || match.date === sundayStr
-        );
+        const matches = allMatches.filter((match: Match) => {
+          return match.date === saturdayStr || match.date === sundayStr;
+        });
         
-        setMatches(weekendMatches);
+        // Trier par date et heure
+        matches.sort((a: Match, b: Match) => {
+          if (a.date !== b.date) {
+            return (a.date || '').localeCompare(b.date || '');
+          }
+          return (a.time || '99:99').localeCompare(b.time || '99:99');
+        });
+        
+        setWeekendMatches(matches);
       } catch (error) {
-        console.error("Erreur lors de la récupération des matchs du week-end :", error);
+        console.error("Erreur lors de la récupération des matchs du week-end:", error);
       } finally {
         setIsLoading(false);
       }
     };
-
-    fetchData();
+    
+    fetchWeekendMatches();
   }, []);
 
   if (isLoading) {
     return (
-      <div className="bg-gradient-to-r from-blue-50 to-yellow-50 border border-blue-200 rounded-xl p-6 mb-6">
-        <h2 className="text-xl font-bold text-blue-800 mb-4">
-          📅 Matchs du Week-End
-        </h2>
+      <div className="bg-blue-50 p-4 rounded-lg mb-6">
+        <h3 className="text-lg font-semibold text-blue-800 mb-2 flex items-center gap-2">
+          <Calendar className="w-5 h-5" />
+          Matchs du Week-end
+        </h3>
         <p className="text-blue-600">Chargement...</p>
       </div>
     );
   }
 
-  if (matches.length === 0) {
+  if (weekendMatches.length === 0) {
     return (
-      <div className="bg-gradient-to-r from-blue-50 to-yellow-50 border border-blue-200 rounded-xl p-6 mb-6">
-        <h2 className="text-xl font-bold text-blue-800 mb-4">
-          📅 Matchs du Week-End
-        </h2>
-        <p className="text-gray-600 text-center py-4">
-          Aucun match prévu pour ce week-end ({weekendDates.saturday} - {weekendDates.sunday})
-        </p>
+      <div className="bg-blue-50 p-4 rounded-lg mb-6">
+        <h3 className="text-lg font-semibold text-blue-800 mb-2 flex items-center gap-2">
+          <Calendar className="w-5 h-5" />
+          Matchs du Week-end
+        </h3>
+        <p className="text-gray-600">Aucun match prévu ce week-end.</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-gradient-to-r from-blue-50 to-yellow-50 border-2 border-blue-300 rounded-xl p-6 mb-6 shadow-lg">
-      <h2 className="text-xl font-bold text-blue-800 mb-4 flex items-center gap-2">
-        <Calendar className="w-6 h-6" />
-        Matchs du Week-End ({formatDisplayDate(weekendDates.saturday)} - {formatDisplayDate(weekendDates.sunday)})
-      </h2>
-      <p className="text-sm text-blue-600 mb-4">
-        {matches.length} match{matches.length > 1 ? 's' : ''} prévu{matches.length > 1 ? 's' : ''}
-      </p>
-      <div className="space-y-2">
-        {matches.map((match) => (
-          <WeekendMatchItem key={`${match.date}-${match.home_team}-${match.away_team}`} match={match} />
-        ))}
+    <div className="bg-blue-50 p-4 rounded-lg mb-6">
+      <h3 className="text-lg font-semibold text-blue-800 mb-4 flex items-center gap-2">
+        <Calendar className="w-5 h-5" />
+        Matchs du Week-end ({weekendMatches.length})
+      </h3>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {weekendMatches.map((match) => {
+          const locationBgColor = getLocationBgColor(match.location, match.is_home);
+          const icon = getMatchIcon(match.is_home, match.is_away);
+          
+          return (
+            <div 
+              key={`${match.date}-${match.home_team}-${match.away_team}`}
+              className={`p-3 rounded-lg ${locationBgColor} border border-blue-200`}
+            >
+              <div className="flex items-start gap-2">
+                <div className="flex-shrink-0">{icon}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-blue-800 text-sm truncate">
+                    {match.home_team} {match.away_team ? 'vs' : ''} {match.away_team}
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    {formatDisplayDate(match.date)} {match.day}
+                    {match.time && <span className="ml-2 text-yellow-600">{formatTime(match.time)}</span>}
+                  </div>
+                  <div className="text-xs mt-1">
+                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                      {match.location}
+                    </span>
+                    {match.camionnette && (
+                      <span className="bg-green-100 text-green-800 px-2 py-1 rounded ml-1 text-xs">
+                        Camionnette: {match.camionnette}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
