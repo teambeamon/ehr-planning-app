@@ -46,7 +46,11 @@ export default function StatsPage() {
     const locationCounts: Record<string, number> = {};
     matches.forEach((match) => {
       if (match.location) {
-        locationCounts[match.location] = (locationCounts[match.location] || 0) + 1;
+        // Ne compter que les salles EHR (Hettange Hall, Hettange Poly, Rodemack)
+        const locationLower = match.location.toLowerCase();
+        if (locationLower.includes('hettange') || locationLower.includes('rodemack') || locationLower.includes('kanfen')) {
+          locationCounts[match.location] = (locationCounts[match.location] || 0) + 1;
+        }
       }
     });
     return Object.entries(locationCounts)

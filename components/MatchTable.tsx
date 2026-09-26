@@ -196,41 +196,31 @@ export default function MatchTableNew() {
       }
     },
     {
-      accessorKey: "home_team",
+      accessorKey: "match_display",
       header: () => (
         <div className="flex items-center gap-2">
-          <Home className="w-4 h-4" />
-          Équipe à domicile
+          <Trophy className="w-4 h-4" />
+          Match
         </div>
       ),
       cell: ({ row }) => {
-        const homeTeam = row.getValue('home_team') as string | null;
+        const matchDisplay = row.getValue('match_display') as string | null;
         const isHome = row.getValue('is_home') as boolean | undefined;
         const isAway = row.getValue('is_away') as boolean | undefined;
-        return homeTeam ? (
-          <span className={`font-semibold ${isHome && !isAway ? 'text-blue-800' : 'text-gray-700'}`}>
-            {homeTeam}
+        const location = row.getValue('location') as string | null;
+        
+        if (!matchDisplay) return '-';
+        
+        // Déterminer la couleur du badge selon le lieu (uniquement pour les matchs à domicile)
+        const locationColor = isHome ? getLocationColor(location, isHome) : 'bg-gray-100 text-gray-800';
+        const icon = getMatchIcon(isHome, isAway);
+        
+        return (
+          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm font-medium ${locationColor}`}>
+            {icon}
+            {matchDisplay}
           </span>
-        ) : '-';
-      }
-    },
-    {
-      accessorKey: "away_team",
-      header: () => (
-        <div className="flex items-center gap-2">
-          <Plane className="w-4 h-4" />
-          Équipe à l'extérieur
-        </div>
-      ),
-      cell: ({ row }) => {
-        const value = row.getValue('away_team') as string | null;
-        const isAway = row.getValue('is_away') as boolean | undefined;
-        const isHome = row.getValue('is_home') as boolean | undefined;
-        return value ? (
-          <span className={`font-medium ${isAway && !isHome ? 'text-yellow-700' : 'text-gray-700'}`}>
-            {value}
-          </span>
-        ) : '-';
+        );
       }
     },
     {

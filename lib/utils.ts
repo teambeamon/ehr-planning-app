@@ -6,6 +6,7 @@ export type Match = {
   day: string | null;
   home_team: string | null;
   away_team: string | null;
+  match_display?: string;
   time: string | null;
   location: string | null;
   is_home?: boolean;

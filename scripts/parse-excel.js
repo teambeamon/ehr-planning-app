@@ -237,7 +237,8 @@ function parseMatchCell(cellStr, date, day, location, team, category, coach) {
   // Gérer les cellules avec plusieurs matchs (ex: "P2H, EHR 1 et Rombas 3")
   // Ces cas sont complexes, on va essayer de les ignorer ou de les parser partiellement
   // Selon l'utilisateur, ce sont des matchs à planifier
-  if (cleaned.includes(' et ') || (cleaned.includes(',') && cleaned.includes('EHR'))) {
+  const hasEHR = /\bEHR\b/.test(cleaned.toUpperCase());
+  if (cleaned.includes(' et ') || (cleaned.includes(',') && hasEHR)) {
     // Essayer de parser chaque partie
     // Mais pour l'instant, on va ignorer ces cas complexes
     // On pourrait les ajouter comme matchs multiples, mais c'est complexe
@@ -263,26 +264,29 @@ function parseMatchCell(cellStr, date, day, location, team, category, coach) {
       const t2 = cleanTeamName(team2);
       
       // Déterminer si c'est un match à domicile (EHR en premier)
-      const t1IsEHR = t1.toUpperCase().includes('EHR');
-      const t2IsEHR = t2.toUpperCase().includes('EHR');
+      // Vérifier que c'est exactement EHR (pas juste une sous-chaîne comme "Behren")
+      const t1IsEHR = t1.toUpperCase().trim() === 'EHR' || t1.toUpperCase().trim() === 'EHR 1' || t1.toUpperCase().trim() === 'EHR 2' || t1.toUpperCase().match(/^EHR\s*\d*$/);
+      const t2IsEHR = t2.toUpperCase().trim() === 'EHR' || t2.toUpperCase().trim() === 'EHR 1' || t2.toUpperCase().trim() === 'EHR 2' || t2.toUpperCase().match(/^EHR\s*\d*$/);
       
       if (t1IsEHR && !t2IsEHR) {
         // EHR est en premier = match à domicile
-        homeTeam = t1;
+        // Remplacer EHR par le nom complet de l'équipe
+        homeTeam = team || t1;
         awayTeam = t2;
         isHome = true;
         isAway = false;
         isInternal = false;
       } else if (t2IsEHR && !t1IsEHR) {
         // EHR est en second = match à l'extérieur
-        homeTeam = t2;
-        awayTeam = t1;
+        homeTeam = t1;
+        // Remplacer EHR par le nom complet de l'équipe
+        awayTeam = team || t2;
         isHome = false;
         isAway = true;
         isInternal = false;
       } else if (t1IsEHR && t2IsEHR) {
         // Match interne entre deux équipes EHR
-        homeTeam = t1;
+        homeTeam = team || t1;
         awayTeam = t2;
         isHome = true;
         isAway = true;
@@ -297,11 +301,15 @@ function parseMatchCell(cellStr, date, day, location, team, category, coach) {
         isInternal = false;
       }
       
+      // Créer un affichage du match
+      const matchDisplay = `${homeTeam} vs ${awayTeam}`;
+      
       return {
         date,
         day,
         home_team: homeTeam,
         away_team: awayTeam,
+        match_display: matchDisplay,
         time,
         location,
         match_type: matchType,
@@ -316,8 +324,9 @@ function parseMatchCell(cellStr, date, day, location, team, category, coach) {
   }
   
   // Cas 2: Une seule équipe mentionnée (peut-être un adversaire seul)
-  // Vérifier si c'est une équipe EHR
-  if (cleaned.toUpperCase().includes('EHR')) {
+  // Vérifier si c'est une équipe EHR (match exact)
+  const ehrExactMatch = cleaned.match(/\bEHR\b/i);
+  if (ehrExactMatch) {
     // C'est un match concernant EHR
     // Si c'est juste "EHR" ou "EHR 1" ou "EHR 2", c'est peut-être un match à domicile sans adversaire ?
     // Ou c'est un match mal formaté
@@ -331,11 +340,14 @@ function parseMatchCell(cellStr, date, day, location, team, category, coach) {
     // On va considérer que c'est un match à domicile contre un adversaire inconnu
     const ehrMatch = cleaned.match(/(EHR\s*\d*)/i);
     if (ehrMatch) {
+      const homeTeam = team || ehrMatch[1];
+      const matchDisplay = homeTeam;
       return {
         date,
         day,
-        home_team: ehrMatch[1],
+        home_team: homeTeam,
         away_team: null,
+        match_display: matchDisplay,
         time,
         location,
         match_type: matchType,
@@ -361,16 +373,18 @@ function parseMatchCell(cellStr, date, day, location, team, category, coach) {
     if (cleanedOpponent.length < 2) return null;
     if (isNonMatchCell(cleanedOpponent)) return null;
     
-    // Vérifier si l'équipe de la colonne est EHR
-    const teamIsEHR = team.toUpperCase().includes('EHR');
+    // Vérifier si l'équipe de la colonne est EHR (match exact)
+    const teamIsEHR = team && (team.toUpperCase().trim() === 'EHR' || team.toUpperCase().trim() === 'EHR 1' || team.toUpperCase().trim() === 'EHR 2' || team.toUpperCase().match(/^EHR\s*\d*$/));
     
     if (teamIsEHR) {
       // Match à domicile
+      const matchDisplay = `${team} vs ${cleanedOpponent}`;
       return {
         date,
         day,
         home_team: team,
         away_team: cleanedOpponent,
+        match_display: matchDisplay,
         time,
         location,
         match_type: matchType,
@@ -384,11 +398,13 @@ function parseMatchCell(cellStr, date, day, location, team, category, coach) {
     } else {
       // Match à l'extérieur
       if (/^\d+$/.test(cleanedOpponent.trim())) return null;
+      const matchDisplay = `${cleanedOpponent} vs ${team}`;
       return {
         date,
         day,
         home_team: cleanedOpponent,
         away_team: team,
+        match_display: matchDisplay,
         time,
         location,
         match_type: matchType,

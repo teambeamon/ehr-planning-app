@@ -136,7 +136,8 @@ function parseMatchCell(
   }
   cleaned = cleanCellStr(cleaned);
   
-  if (cleaned.includes(' et ') || (cleaned.includes(',') && cleaned.includes('EHR'))) {
+  const hasEHR = /\bEHR\b/.test(cleaned.toUpperCase());
+  if (cleaned.includes(' et ') || (cleaned.includes(',') && hasEHR)) {
     return null;
   }
   
@@ -149,25 +150,30 @@ function parseMatchCell(
     if (parts.length >= 2) {
       const t1 = cleanTeamName(parts[0]);
       const t2 = cleanTeamName(parts.slice(1).join(separator).trim());
-      const t1IsEHR = t1.toUpperCase().includes('EHR');
-      const t2IsEHR = t2.toUpperCase().includes('EHR');
+      // Vérifier que c'est exactement EHR (pas juste une sous-chaîne comme "Behren")
+      const t1IsEHR = t1.toUpperCase().trim() === 'EHR' || t1.toUpperCase().trim() === 'EHR 1' || t1.toUpperCase().trim() === 'EHR 2' || t1.toUpperCase().match(/^EHR\s*\d*$/);
+      const t2IsEHR = t2.toUpperCase().trim() === 'EHR' || t2.toUpperCase().trim() === 'EHR 1' || t2.toUpperCase().trim() === 'EHR 2' || t2.toUpperCase().match(/^EHR\s*\d*$/);
       
-      if (t1IsEHR && !t2IsEHR) { homeTeam = t1; awayTeam = t2; isHome = true; }
-      else if (t2IsEHR && !t1IsEHR) { homeTeam = t2; awayTeam = t1; isAway = true; }
-      else if (t1IsEHR && t2IsEHR) { homeTeam = t1; awayTeam = t2; isHome = true; isAway = true; isInternal = true; }
+      if (t1IsEHR && !t2IsEHR) { homeTeam = team || t1; awayTeam = t2; isHome = true; }
+      else if (t2IsEHR && !t1IsEHR) { homeTeam = t1; awayTeam = team || t2; isAway = true; }
+      else if (t1IsEHR && t2IsEHR) { homeTeam = team || t1; awayTeam = t2; isHome = true; isAway = true; isInternal = true; }
       else { homeTeam = t1; awayTeam = t2; }
       
-      return { date, day, home_team: homeTeam, away_team: awayTeam, time, location,
+      const matchDisplay = `${homeTeam} vs ${awayTeam}`;
+      return { date, day, home_team: homeTeam, away_team: awayTeam, match_display: matchDisplay, time, location,
                match_type: matchType, category: category || team, coach,
                is_home: isHome, is_away: isAway, is_internal: isInternal, original_team: team };
     }
   }
   
-  if (cleaned.toUpperCase().includes('EHR')) {
+  const ehrExactMatch = cleaned.match(/\bEHR\b/i);
+  if (ehrExactMatch) {
     if (isNonMatchCell(cleaned)) return null;
     const ehrMatch = cleaned.match(/(EHR\s*\d*)/i);
     if (ehrMatch) {
-      return { date, day, home_team: ehrMatch[1], away_team: null, time, location,
+      const homeTeam = team || ehrMatch[1];
+      const matchDisplay = homeTeam;
+      return { date, day, home_team: homeTeam, away_team: null, match_display: matchDisplay, time, location,
                match_type: matchType, category: category || team, coach,
                is_home: true, is_away: false, is_internal: false, original_team: team };
     }
@@ -175,19 +181,22 @@ function parseMatchCell(
   
   if (team) {
     const cleanedOpponent = cleanTeamName(cleaned);
-    const teamIsEHR = team.toUpperCase().includes('EHR');
+    // Vérifier si l'équipe de la colonne est EHR (match exact)
+    const teamIsEHR = team && (team.toUpperCase().trim() === 'EHR' || team.toUpperCase().trim() === 'EHR 1' || team.toUpperCase().trim() === 'EHR 2' || team.toUpperCase().match(/^EHR\s*\d*$/));
     
     // Validation supplémentaire : si le nom de l'adversaire est trop court ou suspect, ignorer
     if (cleanedOpponent.length < 2) return null;
     if (isNonMatchCell(cleanedOpponent)) return null;
     
     if (teamIsEHR) {
-      return { date, day, home_team: team, away_team: cleanedOpponent, time, location,
+      const matchDisplay = `${team} vs ${cleanedOpponent}`;
+      return { date, day, home_team: team, away_team: cleanedOpponent, match_display: matchDisplay, time, location,
                match_type: matchType, category: category || team, coach,
                is_home: true, is_away: false, is_internal: false, original_team: team };
     } else {
       if (/^\d+$/.test(cleanedOpponent.trim())) return null;
-      return { date, day, home_team: cleanedOpponent, away_team: team, time, location,
+      const matchDisplay = `${cleanedOpponent} vs ${team}`;
+      return { date, day, home_team: cleanedOpponent, away_team: team, match_display: matchDisplay, time, location,
                match_type: matchType, category: category || team, coach,
                is_home: false, is_away: true, is_internal: false, original_team: team };
     }
