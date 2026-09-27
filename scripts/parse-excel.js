@@ -423,14 +423,20 @@ function parseExcelFile(filePath) {
       const matchInfo = parseMatchCell(cellStr, team, formattedDate, currentDay, cellLocation);
       
       if (matchInfo) {
-        // Vérifier la camionnette (colonnes C et D = indices 2 et 3)
+        // Vérifier la camionnette UNIQUEMENT dans la cellule de l'équipe elle-même
+        // Cela évite que toutes les équipes d'une ligne aient la même camionnette
         let camionnette = null;
-        for (const colIdx of [2, 3]) {
-          const val = jsonData[row]?.[colIdx] ? String(jsonData[row][colIdx]).trim() : null;
-          if (val && !['Dispo Salles', 'Réservation camionnettes', 'N° 1', 'N° 2', 'Coach', 
-                        'Réservation camionnette', 'Dispo', 'Salles', 'Réservation', 'camionnettes'].includes(val)) {
-            camionnette = val;
-            break;
+        
+        // Chercher dans la cellule de l'équipe (pas dans les colonnes C/D)
+        const cellLower = cellStr.toLowerCase();
+        if (cellLower.includes('camionnette') || cellLower.includes('camion')) {
+          // Extraire le numéro ou le nom de la camionnette
+          const camionMatch = cellStr.match(/(?:camionnette|camion|véhicule)\s*(?:n°\s*)?(\d+|[A-Za-z]+)/i);
+          if (camionMatch) {
+            camionnette = `N°${camionMatch[1].trim()}`;
+          } else {
+            // Si pas de numéro trouvé, prendre toute la mention
+            camionnette = cellStr;
           }
         }
         
