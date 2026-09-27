@@ -357,6 +357,10 @@ function parseExcelFile(filePath) {
   
   const matches = [];
   
+  // Objet pour stocker les réservations de camionnettes par date
+  // Format: { '2026-09-27': [{ team: 'Seniors M', camionnette: 'N°1' }, ...] }
+  const camionnetteReservationsByDate = {};
+  
   // Parcourir toutes les lignes à partir de la ligne 14 (index 13)
   for (let row = 14; row < jsonData.length; row++) {
     // Vérifier s'il y a une date en colonne E (index 4)
@@ -438,20 +442,58 @@ function parseExcelFile(filePath) {
             // Si pas de numéro trouvé, prendre toute la mention
             camionnette = cellStr;
           }
+          
+          // Stocker dans les réservations par date
+          if (!camionnetteReservationsByDate[formattedDate]) {
+            camionnetteReservationsByDate[formattedDate] = [];
+          }
+          camionnetteReservationsByDate[formattedDate].push({
+            team: team,
+            camionnette: camionnette,
+            column: col
+          });
+        }
+        
+        // Vérifier aussi les colonnes C et D (2 et 3) pour les réservations de camionnettes
+        // qui sont globales à la ligne (indépendantes des équipes)
+        let lineCamionnette = null;
+        for (const colIdx of [2, 3]) {
+          const val = jsonData[row]?.[colIdx] ? String(jsonData[row][colIdx]).trim() : null;
+          if (val && val.toLowerCase().includes('camionnette') && 
+              !['Dispo Salles', 'Réservation camionnettes', 'N° 1', 'N° 2', 'Coach', 
+                'Réservation camionnette', 'Dispo', 'Salles', 'Réservation', 'camionnettes'].includes(val)) {
+            lineCamionnette = val;
+            break;
+          }
+        }
+        
+        // Si une camionnette est mentionnée dans les colonnes C/D, l'associer à TOUTES les équipes de cette ligne
+        // mais de manière lisible
+        if (lineCamionnette && !camionnette) {
+          // Stocker dans les réservations par date avec indication "Ligne"
+          if (!camionnetteReservationsByDate[formattedDate]) {
+            camionnetteReservationsByDate[formattedDate] = [];
+          }
+          camionnetteReservationsByDate[formattedDate].push({
+            team: team,
+            camionnette: lineCamionnette,
+            column: col,
+            note: 'Réservation ligne'
+          });
         }
         
         matchInfo.original_column = col;
         matchInfo.original_row = row;
         matchInfo.season = season;
         matchInfo.last_updated = lastUpdated;
-        matchInfo.camionnette = camionnette;
+        matchInfo.camionnette = camionnette || lineCamionnette;
         
         matches.push(matchInfo);
       }
     }
   }
   
-  return matches;
+  return { matches, camionnetteReservationsByDate };
 }
 
 const args = process.argv.slice(2);
@@ -460,9 +502,16 @@ const outputFile = args[1] || join(__dirname, '..', 'data', 'matches.json');
 
 try {
   console.log('Parsing avec logique v10 (alignement par COLONNE)...\n');
-  const matches = parseExcelFile(inputFile);
+  const { matches, camionnetteReservationsByDate } = parseExcelFile(inputFile);
+  
+  // Sauvegarder les matchs
   writeFileSync(outputFile, JSON.stringify(matches, null, 2));
   console.log(`Found ${matches.length} matches\n`);
+  
+  // Sauvegarder aussi les réservations de camionnettes
+  const camionnetteFile = join(__dirname, '..', 'data', 'camionnette-reservations.json');
+  writeFileSync(camionnetteFile, JSON.stringify(camionnetteReservationsByDate, null, 2));
+  console.log(`Saved camionnette reservations to ${camionnetteFile}\n`);
   
   // Statistiques
   const locs = new Set();
