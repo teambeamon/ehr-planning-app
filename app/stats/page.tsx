@@ -1,7 +1,7 @@
 // app/stats/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { Match } from "@/lib/utils";
 import { Truck } from "lucide-react";
@@ -128,11 +128,12 @@ export default function StatsPage() {
       .sort((a, b) => b.count - a.count);
   };
 
-  const teamStats = getTeamStats();
-  const locationStats = getLocationStats();
-  const categoryStats = getCategoryStats();
-  const monthlyStats = getMonthlyStats();
-  const camionnetteStats = getCamionnetteStats();
+  // Memoize all stats calculations
+  const teamStats = useMemo(() => getTeamStats(), [matches]);
+  const locationStats = useMemo(() => getLocationStats(), [matches]);
+  const categoryStats = useMemo(() => getCategoryStats(), [matches]);
+  const monthlyStats = useMemo(() => getMonthlyStats(), [matches]);
+  const camionnetteStats = useMemo(() => getCamionnetteStats(), [matches]);
 
   if (isLoading) {
     return (
