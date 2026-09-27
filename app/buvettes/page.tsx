@@ -116,8 +116,13 @@ export default function BuvettesPage() {
   const [selectedWeekend, setSelectedWeekend] = useState<{saturday: string; sunday: string} | null>(null);
   const [allWeekends, setAllWeekends] = useState<{saturday: string; sunday: string; label: string}[]>([]);
   
-  // Liste des salles EHR
+  // Liste des salles EHR (sans Extérieur)
   const ehrLocations = ['Rodemack', 'Hettange (Hall)', 'Hettange (Poly)', 'Kanfen'];
+  
+  // Filtrer les matchs Extérieur
+  const filterEHRMatches = (matches: Match[]) => {
+    return matches.filter(m => m.location && ehrLocations.includes(m.location));
+  };
 
   useEffect(() => {
     const fetchMatches = async () => {
@@ -237,13 +242,15 @@ export default function BuvettesPage() {
     return weekends;
   };
 
-  // Obtenir les matchs pour le week-end sélectionné
+  // Obtenir les matchs pour le week-end sélectionné (sans Extérieur)
   const getWeekendMatches = () => {
     if (!selectedWeekend) return [];
     
-    return matches.filter((m) => {
+    const weekendMatches = matches.filter((m) => {
       return m.date === selectedWeekend.saturday || m.date === selectedWeekend.sunday;
     });
+    
+    return filterEHRMatches(weekendMatches);
   };
 
   // Grouper les matchs par date puis par salle
@@ -315,41 +322,49 @@ export default function BuvettesPage() {
     return candidates;
   };
 
-  // Obtenir un résumé par salle pour le week-end
+  // Obtenir un résumé par salle pour le week-end (groupé par date)
   const getLocationSummary = () => {
     const matchesByDateAndLocation = getMatchesByDateAndLocation();
-    const summary: Record<string, { matches: Match[]; consecutiveGroups: Match[][]; isBuvetteCandidate: boolean }> = {};
+    const summary: Record<string, { matchesByDate: Record<string, Match[]>; consecutiveGroupsByDate: Record<string, Match[][]>; totalMatches: number; isBuvetteCandidate: boolean }> = {};
     
     // Initialiser avec toutes les salles EHR
     ehrLocations.forEach((location) => {
-      summary[location] = { matches: [], consecutiveGroups: [], isBuvetteCandidate: false };
+      summary[location] = { matchesByDate: {}, consecutiveGroupsByDate: {}, totalMatches: 0, isBuvetteCandidate: false };
     });
     
     // Parcourir toutes les dates
-    Object.values(matchesByDateAndLocation).forEach((locations) => {
+    Object.entries(matchesByDateAndLocation).forEach(([date, locations]) => {
       Object.entries(locations).forEach(([location, locationMatches]) => {
         if (ehrLocations.includes(location)) {
           if (!summary[location]) {
-            summary[location] = { matches: [], consecutiveGroups: [], isBuvetteCandidate: false };
+            summary[location] = { matchesByDate: {}, consecutiveGroupsByDate: {}, totalMatches: 0, isBuvetteCandidate: false };
           }
-          summary[location].matches.push(...locationMatches);
+          summary[location].matchesByDate[date] = locationMatches;
+          summary[location].totalMatches += locationMatches.length;
         }
       });
     });
     
-    // Vérifier les matchs consécutifs pour chaque salle
+    // Vérifier les matchs consécutifs pour chaque salle et par date
     Object.keys(summary).forEach((location) => {
-      if (summary[location].matches.length >= 2) {
-        const sortedMatches = [...summary[location].matches].sort((a, b) => {
-          const dateCompare = (a.date || '').localeCompare(b.date || '');
-          if (dateCompare !== 0) return dateCompare;
-          return (a.time || '23:59').localeCompare(b.time || '23:59');
-        });
-        
-        const consecutiveGroups = findConsecutiveGroups(sortedMatches);
-        summary[location].consecutiveGroups = consecutiveGroups;
-        summary[location].isBuvetteCandidate = consecutiveGroups.length > 0;
-      }
+      let hasConsecutive = false;
+      const consecutiveGroupsByDate: Record<string, Match[][]> = {};
+      
+      Object.entries(summary[location].matchesByDate).forEach(([date, dateMatches]) => {
+        if (dateMatches.length >= 2) {
+          const sortedMatches = [...dateMatches].sort((a, b) => {
+            return (a.time || '23:59').localeCompare(b.time || '23:59');
+          });
+          const consecutiveGroups = findConsecutiveGroups(sortedMatches);
+          if (consecutiveGroups.length > 0) {
+            consecutiveGroupsByDate[date] = consecutiveGroups;
+            hasConsecutive = true;
+          }
+        }
+      });
+      
+      summary[location].consecutiveGroupsByDate = consecutiveGroupsByDate;
+      summary[location].isBuvetteCandidate = hasConsecutive;
     });
     
     return summary;
@@ -430,10 +445,16 @@ export default function BuvettesPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {ehrLocations.map((location) => {
               const summary = locationSummary[location];
-              const totalMatches = summary?.matches.length || 0;
+              const totalMatches = summary?.totalMatches || 0;
               const hasConsecutive = summary?.isBuvetteCandidate || false;
-              const consecutiveGroups = summary?.consecutiveGroups || [];
-              const totalConsecutiveMatches = consecutiveGroups.reduce((sum, group) => sum + group.length, 0);
+              const matchesByDate = summary?.matchesByDate || {};
+              const consecutiveGroupsByDate = summary?.consecutiveGroupsByDate || {};
+              
+              // Calculer le total de matchs consécutifs
+              const totalConsecutiveMatches = Object.values(consecutiveGroupsByDate).reduce(
+                (sum, groups) => sum + groups.reduce((gSum, group) => gSum + group.length, 0),
+                0
+              );
               
               return (
                 <div
@@ -450,7 +471,7 @@ export default function BuvettesPage() {
                       </span>
                     ) : (
                       <span className="bg-gray-300 text-gray-600 px-2 py-1 rounded-full text-xs">
-                        -ucun créneau
+                        Aucun créneau
                       </span>
                     )}
                   </div>
@@ -466,23 +487,27 @@ export default function BuvettesPage() {
                         <span className="font-semibold text-green-700">{totalConsecutiveMatches}</span>
                       </div>
                     )}
-                    {hasConsecutive && consecutiveGroups.length > 0 && (
+                    {hasConsecutive && Object.keys(consecutiveGroupsByDate).length > 0 && (
                       <div className="mt-3 pt-3 border-t border-current/20">
-                        <p className="text-xs text-gray-600 mb-2">Créneaux:</p>
-                        {consecutiveGroups.slice(0, 2).map((group, idx) => (
-                          <div key={idx} className="text-xs bg-white/50 p-2 rounded mb-1">
-                            {group.map((m, i) => (
-                              <div key={i} className="flex items-center gap-2">
-                                <span>{formatTime(m.time)}</span>
-                                <span className="text-gray-500">-</span>
-                                <span className="truncate max-w-20">{m.home_team} vs {m.away_team}</span>
+                        <p className="text-xs text-gray-600 mb-2">Créneaux par date:</p>
+                        {Object.entries(consecutiveGroupsByDate).map(([date, groups]) => (
+                          <div key={date} className="mb-2">
+                            <p className="text-xs font-medium text-blue-700 mb-1">
+                              {formatDisplayDate(date)} ({getDayName(date).substring(0, 3)})
+                            </p>
+                            {groups.slice(0, 2).map((group, idx) => (
+                              <div key={idx} className="text-xs bg-white/50 p-2 rounded mb-1">
+                                {group.map((m, i) => (
+                                  <div key={i} className="flex items-center gap-2">
+                                    <span>{formatTime(m.time)}</span>
+                                    <span className="text-gray-500">-</span>
+                                    <span className="truncate max-w-20">{m.home_team} vs {m.away_team}</span>
+                                  </div>
+                                ))}
                               </div>
                             ))}
                           </div>
                         ))}
-                        {consecutiveGroups.length > 2 && (
-                          <p className="text-xs text-blue-600 mt-1">+{consecutiveGroups.length - 2} autre(s) créneau(x)</p>
-                        )}
                       </div>
                     )}
                   </div>
