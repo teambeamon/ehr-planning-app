@@ -1,7 +1,7 @@
 // app/buvettes/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Match } from "@/lib/utils";
 import { Calendar, Clock, Home, Plane, Beer, CheckCircle, XCircle, AlertTriangle, Truck } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
@@ -275,33 +275,30 @@ export default function BuvettesPage() {
     return weekends;
   };
 
-  // Obtenir les matchs à afficher (sans Extérieur)
-  const getDisplayMatches = () => {
-    let displayMatches = filterEHRMatches(matches);
+  // Obtenir les matchs à afficher (sans Extérieur) - memoized
+  const displayMatches = useMemo(() => {
+    let result = filterEHRMatches(matches);
     
     if (viewMode === 'weekend' && selectedWeekend) {
-      displayMatches = displayMatches.filter((m) => {
+      result = result.filter((m) => {
         return m.date === selectedWeekend.saturday || m.date === selectedWeekend.sunday;
       });
     }
     
-    return displayMatches;
-  };
-  
-  // Obtenir les matchs pour le week-end sélectionné (sans Extérieur) - pour la compatibilité
-  const getWeekendMatches = () => {
+    return result;
+  }, [viewMode, selectedWeekend, matches]);
+
+  // Obtenir les matchs pour le week-end sélectionné (sans Extérieur) - memoized
+  const weekendMatches = useMemo(() => {
     if (!selectedWeekend) return [];
-    
     const weekendMatches = matches.filter((m) => {
       return m.date === selectedWeekend.saturday || m.date === selectedWeekend.sunday;
     });
-    
     return filterEHRMatches(weekendMatches);
-  };
+  }, [selectedWeekend, matches]);
 
-  // Grouper les matchs par date puis par salle
-  const getMatchesByDateAndLocation = () => {
-    const displayMatches = getDisplayMatches();
+  // Grouper les matchs par date puis par salle - memoized
+  const matchesByDateAndLocation = useMemo(() => {
     const byDate: Record<string, Record<string, Match[]>> = {};
     
     // D'abord trier par date et heure
@@ -335,14 +332,13 @@ export default function BuvettesPage() {
     });
     
     return byDate;
-  };
+  }, [displayMatches]);
 
-  // Vérifier si une salle a des matchs consécutifs pour un week-end
-  const getBuvetteCandidates = () => {
-    const matchesByDateAndLocation = getMatchesByDateAndLocation();
+  // Vérifier si une salle a des matchs consécutifs pour un week-end - memoized
+  const buvetteCandidates = useMemo(() => {
     const candidates: Record<string, { location: string; matches: Match[][]; totalMatches: number }> = {};
     
-    // Parcourir toutes les dates du week-end
+    // Parcourir toutes les dates
     Object.keys(matchesByDateAndLocation).forEach((date) => {
       const locations = matchesByDateAndLocation[date];
       
@@ -366,11 +362,10 @@ export default function BuvettesPage() {
     });
     
     return candidates;
-  };
+  }, [matchesByDateAndLocation]);
 
-  // Obtenir un résumé par salle pour le week-end (groupé par date)
-  const getLocationSummary = () => {
-    const matchesByDateAndLocation = getMatchesByDateAndLocation();
+  // Obtenir un résumé par salle (groupé par date) - memoized
+  const locationSummary = useMemo(() => {
     const summary: Record<string, { matchesByDate: Record<string, Match[]>; consecutiveGroupsByDate: Record<string, Match[][]>; totalMatches: number; isBuvetteCandidate: boolean }> = {};
     
     // Initialiser avec toutes les salles EHR
@@ -414,7 +409,7 @@ export default function BuvettesPage() {
     });
     
     return summary;
-  };
+  }, [matchesByDateAndLocation, ehrLocations]);
 
   if (isLoading) {
     return (
@@ -429,10 +424,8 @@ export default function BuvettesPage() {
     );
   }
 
-  const locationSummary = getLocationSummary();
-  const buvetteCandidates = getBuvetteCandidates();
-  const matchesByDateAndLocation = getMatchesByDateAndLocation();
-  const weekendMatches = getWeekendMatches();
+  // Stats de camionnettes pour le graphique - memoized
+  const camionnetteStats = useMemo(() => getCamionnetteStats(), [matches]);
 
   return (
     <div className="container-custom animate-fade-in">
