@@ -119,7 +119,7 @@ export default function Home() {
           </Link>
 
           {/* Uploader */}
-          <div className="card group hover:shadow-xl transition-shadow cursor-pointer" onClick={() => window.location.href="/upload"}>
+          <Link href="/upload" className="card group hover:shadow-xl transition-shadow cursor-pointer">
             <div className="flex items-center mb-4">
               <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mr-4">
                 <Upload className="w-6 h-6 text-purple-600" />
@@ -132,7 +132,7 @@ export default function Home() {
             <div className="mt-4 text-blue-600 font-medium group-hover:translate-x-1 transition-transform">
               → Uploader un fichier
             </div>
-          </div>
+          </Link>
         </div>
       </section>
 
