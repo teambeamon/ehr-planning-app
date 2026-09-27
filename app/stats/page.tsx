@@ -4,9 +4,12 @@
 import { useState, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { Match } from "@/lib/utils";
+import { Truck } from "lucide-react";
 
 // Couleurs EHR : Bleu et Jaune
 const COLORS = ['#1e40af', '#3b82f6', '#60a5fa', '#93c5fd', '#fbbf24', '#facc15', '#f59e0b', '#d97706'];
+// Couleurs supplémentaires pour les camionnettes
+const CAMIONNETTE_COLORS = ['#8b5cf6', '#ec4899', '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#06b6d4'];
 
 export default function StatsPage() {
   const [matches, setMatches] = useState<Match[]>([]);
@@ -109,10 +112,27 @@ export default function StatsPage() {
       });
   };
 
+  // Stats des camionnettes par équipe (uniquement équipes EHR)
+  const getCamionnetteStats = () => {
+    const ehrLocations = ['Rodemack', 'Hettange (Hall)', 'Hettange (Poly)', 'Kanfen'];
+    const stats: Record<string, number> = {};
+    
+    matches.forEach((match) => {
+      if (match.camionnette && match.home_team && match.is_home && match.location && ehrLocations.includes(match.location)) {
+        stats[match.home_team] = (stats[match.home_team] || 0) + 1;
+      }
+    });
+    
+    return Object.entries(stats)
+      .map(([team, count]) => ({ team, count }))
+      .sort((a, b) => b.count - a.count);
+  };
+
   const teamStats = getTeamStats();
   const locationStats = getLocationStats();
   const categoryStats = getCategoryStats();
   const monthlyStats = getMonthlyStats();
+  const camionnetteStats = getCamionnetteStats();
 
   if (isLoading) {
     return (
@@ -283,6 +303,37 @@ export default function StatsPage() {
             </BarChart>
           </ResponsiveContainer>
         </div>
+
+        {/* Camionnettes par Équipe */}
+        {camionnetteStats.length > 0 && (
+          <div className="card">
+            <h2 className="text-xl font-semibold text-blue-800 mb-6 flex items-center gap-2">
+              <Truck className="w-6 h-6" />
+              Camionnettes par Équipe
+            </h2>
+            <ResponsiveContainer width="100%" height={350}>
+              <BarChart data={camionnetteStats} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0e7ff" />
+                <XAxis type="number" tick={{ fill: '#4f46e5', fontSize: 12 }} />
+                <YAxis dataKey="team" type="category" width={120} tick={{ fill: '#4f46e5', fontSize: 12 }} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#1e40af',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: 'white'
+                  }}
+                  formatter={(value: number) => [`${value} réservations`, 'Camionnette']}
+                />
+                <Bar dataKey="count" radius={[8, 8, 0, 0]}>
+                  {camionnetteStats.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={CAMIONNETTE_COLORS[index % CAMIONNETTE_COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
     </div>
   );

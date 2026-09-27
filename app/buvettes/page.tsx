@@ -116,6 +116,7 @@ export default function BuvettesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedWeekend, setSelectedWeekend] = useState<{saturday: string; sunday: string} | null>(null);
   const [allWeekends, setAllWeekends] = useState<{saturday: string; sunday: string; label: string}[]>([]);
+  const [viewMode, setViewMode] = useState<'weekend' | 'all'>('all');
   
   // Liste des salles EHR (sans Extérieur)
   const ehrLocations = ['Rodemack', 'Hettange (Hall)', 'Hettange (Poly)', 'Kanfen'];
@@ -127,6 +128,13 @@ export default function BuvettesPage() {
   
   // Couleurs pour le graphique
   const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#06b6d4', '#0ea5e9'];
+  
+  // Obtenir la date actuelle pour le focus
+  const getCurrentFocusDate = () => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return now.toISOString().split('T')[0];
+  };
   
   // Obtenir les stats de camionnettes par équipe
   const getCamionnetteStats = () => {
@@ -267,7 +275,20 @@ export default function BuvettesPage() {
     return weekends;
   };
 
-  // Obtenir les matchs pour le week-end sélectionné (sans Extérieur)
+  // Obtenir les matchs à afficher (sans Extérieur)
+  const getDisplayMatches = () => {
+    let displayMatches = filterEHRMatches(matches);
+    
+    if (viewMode === 'weekend' && selectedWeekend) {
+      displayMatches = displayMatches.filter((m) => {
+        return m.date === selectedWeekend.saturday || m.date === selectedWeekend.sunday;
+      });
+    }
+    
+    return displayMatches;
+  };
+  
+  // Obtenir les matchs pour le week-end sélectionné (sans Extérieur) - pour la compatibilité
   const getWeekendMatches = () => {
     if (!selectedWeekend) return [];
     
@@ -280,11 +301,11 @@ export default function BuvettesPage() {
 
   // Grouper les matchs par date puis par salle
   const getMatchesByDateAndLocation = () => {
-    const weekendMatches = getWeekendMatches();
+    const displayMatches = getDisplayMatches();
     const byDate: Record<string, Record<string, Match[]>> = {};
     
     // D'abord trier par date et heure
-    const sortedMatches = [...weekendMatches].sort((a, b) => {
+    const sortedMatches = [...displayMatches].sort((a, b) => {
       if (a.date !== b.date) {
         return (a.date || '').localeCompare(b.date || '');
       }
@@ -422,38 +443,70 @@ export default function BuvettesPage() {
         </p>
       </div>
 
-      {/* Sélecteur de week-end */}
+      {/* Sélecteur de mode d'affichage et week-end */}
       {allWeekends.length > 0 && (
         <div className="card mb-8">
           <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-blue-800 mb-2">
-                📅 Sélectionnez un week-end
-              </label>
-              <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
-                {allWeekends.map((weekend) => {
-                  const isSelected = selectedWeekend?.saturday === weekend.saturday && selectedWeekend?.sunday === weekend.sunday;
-                  const saturdayDate = new Date(weekend.saturday);
-                  const isCurrentMonth = saturdayDate.getMonth() === new Date().getMonth();
-                  
-                  return (
-                    <button
-                      key={`${weekend.saturday}-${weekend.sunday}`}
-                      onClick={() => setSelectedWeekend({ saturday: weekend.saturday, sunday: weekend.sunday })}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                        isSelected
-                          ? 'bg-blue-600 text-white shadow-lg ring-2 ring-blue-500'
-                          : isCurrentMonth
-                            ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      <div className="text-xs opacity-70">{weekend.label.split('(')[1]?.replace(')', '') || ''}</div>
-                      <div className="font-medium">{weekend.label.split('Week-end du ')[1]?.split(' (')[0]}</div>
-                    </button>
-                  );
-                })}
+              <div className="flex items-center gap-4 mb-2">
+                <label className="block text-sm font-medium text-blue-800">
+                  📅 Mode d'affichage
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setViewMode('all')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      viewMode === 'all'
+                        ? 'bg-blue-600 text-white shadow-lg'
+                        : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                    }`}
+                  >
+                    Toutes les dates
+                  </button>
+                  <button
+                    onClick={() => setViewMode('weekend')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      viewMode === 'weekend'
+                        ? 'bg-blue-600 text-white shadow-lg'
+                        : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                    }`}
+                  >
+                    Week-end seulement
+                  </button>
+                </div>
               </div>
+              
+              {viewMode === 'weekend' && (
+                <>
+                  <label className="block text-sm font-medium text-blue-800 mb-2">
+                    Sélectionnez un week-end
+                  </label>
+                  <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
+                    {allWeekends.map((weekend) => {
+                      const isSelected = selectedWeekend?.saturday === weekend.saturday && selectedWeekend?.sunday === weekend.sunday;
+                      const saturdayDate = new Date(weekend.saturday);
+                      const isCurrentMonth = saturdayDate.getMonth() === new Date().getMonth();
+                      
+                      return (
+                        <button
+                          key={`${weekend.saturday}-${weekend.sunday}`}
+                          onClick={() => setSelectedWeekend({ saturday: weekend.saturday, sunday: weekend.sunday })}
+                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                            isSelected
+                              ? 'bg-blue-600 text-white shadow-lg ring-2 ring-blue-500'
+                              : isCurrentMonth
+                                ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          <div className="text-xs opacity-70">{weekend.label.split('(')[1]?.replace(')', '') || ''}</div>
+                          <div className="font-medium">{weekend.label.split('Week-end du ')[1]?.split(' (')[0]}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -678,13 +731,39 @@ export default function BuvettesPage() {
             {Object.keys(matchesByDateAndLocation).sort().map((date) => {
               const locations = matchesByDateAndLocation[date];
               const dateMatches = Object.values(locations).flat();
+              const currentFocusDate = getCurrentFocusDate();
+              
+              // Vérifier si cette date est aujourd'hui, demain, ou dans le week-end à venir
+              const dateObj = new Date(date);
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const tomorrow = new Date(today);
+              tomorrow.setDate(tomorrow.getDate() + 1);
+              
+              const isToday = date === currentFocusDate;
+              const isTomorrow = date === tomorrow.toISOString().split('T')[0];
+              const isCurrentWeekend = selectedWeekend && (date === selectedWeekend.saturday || date === selectedWeekend.sunday);
+              const isHighlighted = isToday || isTomorrow || isCurrentWeekend;
               
               return (
-                <div key={date} className="card">
+                <div 
+                  key={date} 
+                  className={`card ${isHighlighted ? 'ring-2 ring-blue-500 shadow-lg' : ''}`}
+                >
                   <div className="mb-4 pb-4 border-b-2 border-blue-200">
-                    <h3 className="text-xl font-bold text-blue-800 flex items-center gap-2">
+                    <h3 className={`text-xl font-bold flex items-center gap-2 ${isHighlighted ? 'text-blue-700' : 'text-blue-800'}`}>
                       <Calendar className="w-6 h-6" />
                       {formatDisplayDate(date)} - {getDayName(date)}
+                      {isToday && (
+                        <span className="ml-2 bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold">
+                          AUJOURD'HUI
+                        </span>
+                      )}
+                      {isTomorrow && (
+                        <span className="ml-2 bg-yellow-600 text-white px-2 py-1 rounded text-xs font-bold">
+                          DEMAIN
+                        </span>
+                      )}
                     </h3>
                     <p className="text-sm text-gray-600 mt-1">
                       {dateMatches.length} match{dateMatches.length > 1 ? 's' : ''} prévu{dateMatches.length > 1 ? 's' : ''}
