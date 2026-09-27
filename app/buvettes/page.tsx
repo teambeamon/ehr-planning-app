@@ -3,7 +3,8 @@
 
 import { useState, useEffect } from "react";
 import { Match } from "@/lib/utils";
-import { Calendar, Clock, Home, Plane, Beer, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
+import { Calendar, Clock, Home, Plane, Beer, CheckCircle, XCircle, AlertTriangle, Truck } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 // Couleurs des salles EHR
 const LOCATION_COLORS: Record<string, string> = {
@@ -122,6 +123,30 @@ export default function BuvettesPage() {
   // Filtrer les matchs Extérieur
   const filterEHRMatches = (matches: Match[]) => {
     return matches.filter(m => m.location && ehrLocations.includes(m.location));
+  };
+  
+  // Couleurs pour le graphique
+  const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#06b6d4', '#0ea5e9'];
+  
+  // Obtenir les stats de camionnettes par équipe
+  const getCamionnetteStats = () => {
+    const stats: Record<string, number> = {};
+    
+    // Compter les réservations par équipe (home_team ou l'équipe EHR)
+    matches.forEach((match) => {
+      if (match.camionnette && match.home_team) {
+        // Si c'est un match à domicile pour une équipe EHR
+        if (match.is_home && ehrLocations.includes(match.location || '')) {
+          const team = match.home_team;
+          stats[team] = (stats[team] || 0) + 1;
+        }
+      }
+    });
+    
+    // Convertir en tableau trié par nombre de réservations
+    return Object.entries(stats)
+      .sort((a, b) => b[1] - a[1])
+      .map(([team, count]) => ({ team, count }));
   };
 
   useEffect(() => {
@@ -431,6 +456,109 @@ export default function BuvettesPage() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Statistiques des camionnettes */}
+      {selectedWeekend && (
+        <div className="card mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold text-blue-800 flex items-center gap-2">
+              <Truck className="w-6 h-6" />
+              Réservations de Camionnettes
+            </h2>
+          </div>
+          
+          {(() => {
+            const camionnetteStats = getCamionnetteStats();
+            const totalReservations = camionnetteStats.reduce((sum, item) => sum + item.count, 0);
+            
+            if (totalReservations === 0) {
+              return (
+                <div className="text-center py-8">
+                  <p className="text-gray-600">Aucune camionnette réservée pour ce week-end.</p>
+                </div>
+              );
+            }
+            
+            return (
+              <div className="space-y-6">
+                {/* Stats globales */}
+                <div className="flex flex-wrap gap-4 mb-6">
+                  <div className="bg-blue-50 p-4 rounded-lg flex-1 min-w-48">
+                    <p className="text-sm text-gray-600 mb-1">Total réservations</p>
+                    <p className="text-3xl font-bold text-blue-700">{totalReservations}</p>
+                  </div>
+                  <div className="bg-yellow-50 p-4 rounded-lg flex-1 min-w-48">
+                    <p className="text-sm text-gray-600 mb-1">Équipes concernées</p>
+                    <p className="text-3xl font-bold text-yellow-700">{camionnetteStats.length}</p>
+                  </div>
+                </div>
+                
+                {/* Graphique */}
+                <div className="bg-white p-4 rounded-lg border border-gray-200">
+                  <p className="text-sm font-medium text-blue-800 mb-4">
+                    Nombre de réservations par équipe
+                  </p>
+                  <div style={{ height: 300 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={camionnetteStats} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis type="number" stroke="#6b7280" />
+                        <YAxis 
+                          dataKey="team" 
+                          type="category" 
+                          width={150}
+                          stroke="#6b7280"
+                          tick={{ fontSize: 12 }}
+                        />
+                        <Tooltip 
+                          formatter={(value: number, name: string) => [value, `réservations`]} 
+                          wrapperStyle={{ border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                          contentStyle={{ backgroundColor: '#fff', padding: '12px' }}
+                        />
+                        <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]}>
+                          {camionnetteStats.map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={COLORS[index % COLORS.length]} 
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-4 text-center">
+                    * Seules les équipes ayant réservé une camionnette sont affichées
+                  </p>
+                </div>
+                
+                {/* Liste détaillée */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {camionnetteStats.map((stat, index) => {
+                    const color = COLORS[index % COLORS.length];
+                    return (
+                      <div 
+                        key={stat.team}
+                        className="bg-gray-50 p-4 rounded-lg border border-gray-200"
+                        style={{ borderLeft: `4px solid ${color}` }}
+                      >
+                        <div className="flex justify-between items-center mb-2">
+                          <h3 className="font-semibold text-blue-800 truncate">{stat.team}</h3>
+                          <span className="text-white px-2 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: color }}>
+                            {stat.count}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600">
+                          {stat.count} reservation{stat.count > 1 ? 's' : ''} de camionnette
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
