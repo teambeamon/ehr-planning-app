@@ -130,7 +130,7 @@
     "original_row": 32,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "F17 CDF"
+    "camionnette": null
   },
   {
     "date": "2026-09-12",
@@ -149,7 +149,7 @@
     "original_row": 32,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "F17 CDF"
+    "camionnette": null
   },
   {
     "date": "2026-09-12",
@@ -187,7 +187,7 @@
     "original_row": 32,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "F17 CDF"
+    "camionnette": null
   },
   {
     "date": "2026-09-12",
@@ -244,7 +244,7 @@
     "original_row": 32,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "F17 CDF"
+    "camionnette": null
   },
   {
     "date": "2026-09-19",
@@ -738,7 +738,7 @@
     "original_row": 50,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "M15 region"
+    "camionnette": null
   },
   {
     "date": "2026-10-03",
@@ -757,7 +757,7 @@
     "original_row": 50,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "M15 region"
+    "camionnette": null
   },
   {
     "date": "2026-10-03",
@@ -776,7 +776,7 @@
     "original_row": 50,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "M15 region"
+    "camionnette": null
   },
   {
     "date": "2026-10-03",
@@ -795,7 +795,7 @@
     "original_row": 50,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "M15 region"
+    "camionnette": null
   },
   {
     "date": "2026-10-03",
@@ -814,7 +814,7 @@
     "original_row": 50,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "M15 region"
+    "camionnette": null
   },
   {
     "date": "2026-10-03",
@@ -852,7 +852,7 @@
     "original_row": 50,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "M15 region"
+    "camionnette": null
   },
   {
     "date": "2026-10-03",
@@ -1840,7 +1840,7 @@
     "original_row": 104,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "F17 CDF"
+    "camionnette": null
   },
   {
     "date": "2026-12-05",
@@ -1859,7 +1859,7 @@
     "original_row": 104,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "F17 CDF"
+    "camionnette": null
   },
   {
     "date": "2026-12-05",
@@ -1878,7 +1878,7 @@
     "original_row": 104,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "F17 CDF"
+    "camionnette": null
   },
   {
     "date": "2026-12-05",
@@ -1954,7 +1954,7 @@
     "original_row": 104,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "F17 CDF"
+    "camionnette": null
   },
   {
     "date": "2026-12-05",
@@ -2201,7 +2201,7 @@
     "original_row": 134,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "Seniors F1"
+    "camionnette": null
   },
   {
     "date": "2027-01-16",
@@ -2619,7 +2619,7 @@
     "original_row": 164,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "Seniors F1"
+    "camionnette": null
   },
   {
     "date": "2027-02-13",
@@ -2638,7 +2638,7 @@
     "original_row": 164,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "Seniors F1"
+    "camionnette": null
   },
   {
     "date": "2027-02-13",
@@ -2676,7 +2676,7 @@
     "original_row": 164,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "Seniors F1"
+    "camionnette": null
   },
   {
     "date": "2027-02-13",
@@ -2714,7 +2714,7 @@
     "original_row": 164,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "Seniors F1"
+    "camionnette": null
   },
   {
     "date": "2027-02-13",
@@ -2733,7 +2733,7 @@
     "original_row": 164,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "Seniors F1"
+    "camionnette": null
   },
   {
     "date": "2027-02-20",
@@ -3360,7 +3360,7 @@
     "original_row": 248,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "Seniors M"
+    "camionnette": null
   },
   {
     "date": "2027-05-22",
@@ -3398,7 +3398,7 @@
     "original_row": 248,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "Seniors M"
+    "camionnette": null
   },
   {
     "date": "2027-05-22",
@@ -3417,7 +3417,7 @@
     "original_row": 248,
     "season": "SAISON 2026-2027",
     "last_updated": "24/09/2026",
-    "camionnette": "Seniors M"
+    "camionnette": null
   },
   {
     "date": "2027-05-22",

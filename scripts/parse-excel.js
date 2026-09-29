@@ -519,7 +519,8 @@ function parseExcelFile(filePath) {
         original_row: row,
         season: season,
         last_updated: lastUpdated,
-        camionnette: lineCamionnette
+        // Les camionnettes ne sont associées qu'aux matchs à domicile EHR
+        camionnette: (isHome && !isAway && lineCamionnette) ? lineCamionnette : null
       };
       
       matches.push(matchInfo);
