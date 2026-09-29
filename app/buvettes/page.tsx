@@ -516,7 +516,6 @@ export default function BuvettesPage() {
           </div>
           
           {(() => {
-            const camionnetteStats = getCamionnetteStats();
             const totalReservations = camionnetteStats.reduce((sum, item) => sum + item.count, 0);
             
             if (totalReservations === 0) {
