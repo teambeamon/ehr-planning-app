@@ -280,15 +280,17 @@ export default function MatchTableNew() {
       accessorKey: "camionnette",
       header: () => (
         <div className="flex items-center gap-2">
-          <Bus className="w-4 h-4" />
+          <Bus className="w-4 h-4 text-yellow-600" />
           Camionnette
         </div>
       ),
       cell: ({ getValue }) => {
         const value = getValue() as string | null;
         return value ? (
-          <span className="text-xs text-green-700 font-medium">{value}</span>
-        ) : '-';
+          <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-bold">
+            {value}
+          </span>
+        ) : null;
       }
     },
   ];
