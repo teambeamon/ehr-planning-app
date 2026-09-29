@@ -136,12 +136,12 @@ export default function BuvettesPage() {
     return now.toISOString().split('T')[0];
   };
   
-  // Obtenir les stats de camionnettes par équipe
-  const getCamionnetteStats = () => {
+  // Obtenir les stats de camionnettes par équipe (fonction pure)
+  const getCamionnetteStats = (matchesList: Match[]) => {
     const stats: Record<string, number> = {};
     
     // Compter les réservations par équipe (home_team ou l'équipe EHR)
-    matches.forEach((match) => {
+    matchesList.forEach((match) => {
       if (match.camionnette && match.home_team) {
         // Si c'est un match à domicile pour une équipe EHR
         if (match.is_home && ehrLocations.includes(match.location || '')) {
@@ -291,10 +291,10 @@ export default function BuvettesPage() {
   // Obtenir les matchs pour le week-end sélectionné (sans Extérieur) - memoized
   const weekendMatches = useMemo(() => {
     if (!selectedWeekend) return [];
-    const weekendMatches = matches.filter((m) => {
+    const filteredByDate = matches.filter((m) => {
       return m.date === selectedWeekend.saturday || m.date === selectedWeekend.sunday;
     });
-    return filterEHRMatches(weekendMatches);
+    return filterEHRMatches(filteredByDate);
   }, [selectedWeekend, matches]);
 
   // Grouper les matchs par date puis par salle - memoized
@@ -425,7 +425,7 @@ export default function BuvettesPage() {
   }
 
   // Stats de camionnettes pour le graphique - memoized
-  const camionnetteStats = useMemo(() => getCamionnetteStats(), [matches]);
+  const camionnetteStats = useMemo(() => getCamionnetteStats(matches), [matches]);
 
   return (
     <div className="container-custom animate-fade-in">
