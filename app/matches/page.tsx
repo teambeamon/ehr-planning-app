@@ -4,8 +4,47 @@
 import MatchTable from "@/components/MatchTable";
 import WeekendMatches from "@/components/WeekendMatches";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Truck } from "lucide-react";
+
+// Fonctions utilitaires pures (pas de hooks)
+const normalizeTeamDisplay = (team: string) => {
+  const mapping: Record<string, string> = {
+    'Seniors M': 'Seniors Masculins',
+    'Seniors F1': 'Seniors Filles 1',
+    'Seniors F2': 'Seniors Filles 2',
+    'M17 departementale': '17 ans Garçons Départemental',
+    'M17 region': '17 ans Garçons Régional',
+    'F17 CDF': '17 ans Filles Championnat de France',
+    'F17 departementale': '17 ans Filles Départemental',
+    'M15 region': '15 ans Garçons Régional',
+    'M15 departementale': '15 ans Garçons Départemental',
+    'F15 region': '15 ans Filles Régional',
+    'F15 departementale': '15 ans Filles Départemental',
+    'M13 region': '13 ans Garçons Régional',
+    'M13 departementale': '13 ans Garçons Départemental',
+    'F13 departementale': '13 ans Filles Départemental',
+    'M11 interdepartementale': '11 ans Garçons Interdépartemental',
+    'F11 departementale': '11 ans Filles Départemental',
+  };
+  return mapping[team] || team;
+};
+
+const formatDate = (date: string) => {
+  if (!date) return '-';
+  const parts = date.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return date;
+};
+
+const getDayName = (dateStr: string) => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+  return days[date.getDay()];
+};
 
 export default function MatchesPage() {
   const [matches, setMatches] = useState([]);
@@ -27,10 +66,9 @@ export default function MatchesPage() {
     fetchMatches();
   }, []);
 
-  // Extraire les réservations de camionnettes par date
-  const getCamionnetteSummary = () => {
+  // Calculer le résumé des camionnettes dans un useMemo pour éviter les appels de fonction dans le rendu
+  const camionnetteSummary = useMemo(() => {
     const byDate: Record<string, { teams: Set<string>; camionnettes: Set<string> }> = {};
-    
     matches.forEach((m: any) => {
       if (m.camionnette && m.date) {
         if (!byDate[m.date]) {
@@ -40,64 +78,23 @@ export default function MatchesPage() {
         byDate[m.date].camionnettes.add(m.camionnette);
       }
     });
-    
     return byDate;
-  };
+  }, [matches]);
 
-  // Normaliser les noms d'équipes pour affichage
-  const normalizeTeamDisplay = (team: string) => {
-    const mapping: Record<string, string> = {
-      'Seniors M': 'Seniors Masculins',
-      'Seniors F1': 'Seniors Filles 1',
-      'Seniors F2': 'Seniors Filles 2',
-      'M17 departementale': '17 ans Garçons Départemental',
-      'M17 region': '17 ans Garçons Régional',
-      'F17 CDF': '17 ans Filles Championnat de France',
-      'F17 departementale': '17 ans Filles Départemental',
-      'M15 region': '15 ans Garçons Régional',
-      'M15 departementale': '15 ans Garçons Départemental',
-      'F15 region': '15 ans Filles Régional',
-      'F15 departementale': '15 ans Filles Départemental',
-      'M13 region': '13 ans Garçons Régional',
-      'M13 departementale': '13 ans Garçons Départemental',
-      'F13 departementale': '13 ans Filles Départemental',
-      'M11 interdepartementale': '11 ans Garçons Interdépartemental',
-      'F11 departementale': '11 ans Filles Départemental',
-    };
-    return mapping[team] || team;
-  };
-
-  const formatDate = (date: string) => {
-    if (!date) return '-';
-    const parts = date.split('-');
-    if (parts.length === 3) {
-      return `${parts[2]}/${parts[1]}/${parts[0]}`;
-    }
-    return date;
-  };
-
-  const getDayName = (dateStr: string) => {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-    return days[date.getDay()];
-  };
-
-  const camionnetteSummary = getCamionnetteSummary();
-  const hasCamionnettes = Object.keys(camionnetteSummary).length > 0;
+  const hasCamionnettes = useMemo(() => Object.keys(camionnetteSummary).length > 0, [camionnetteSummary]);
 
   return (
-    <div className="container-custom animate-fade-in">
+    <div className="container mx-auto px-4 py-8 animate-fade-in">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="page-title">Planning des Matchs</h1>
-          <p className="page-subtitle">
+          <h1 className="text-3xl font-bold text-blue-800 mb-2">Planning des Matchs</h1>
+          <p className="text-gray-600">
             Saison 2026-2027 - Entente Hettange Rodemack
           </p>
         </div>
         <Link
           href="/upload"
-          className="btn-secondary"
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-md"
         >
           + Uploader un Nouveau Planning
         </Link>
@@ -108,7 +105,7 @@ export default function MatchesPage() {
       
       {/* Résumé des Camionnettes - Visible sans scroll */}
       {hasCamionnettes && !isLoading && (
-        <div className="card mb-8 bg-yellow-50 border-yellow-200">
+        <div className="bg-white rounded-xl shadow-md p-6 mb-8 border border-yellow-200">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-blue-800 flex items-center gap-2">
               <Truck className="w-6 h-6" />
@@ -121,7 +118,7 @@ export default function MatchesPage() {
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {Object.entries(camionnetteSummary).sort().map(([date, data]) => (
-              <div key={date} className="bg-white p-4 rounded-lg border border-yellow-200">
+              <div key={date} className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
                 <h3 className="font-semibold text-blue-800 mb-3">
                   {formatDate(date)} - {getDayName(date)}
                 </h3>
@@ -143,7 +140,7 @@ export default function MatchesPage() {
       )}
       
       {/* Tableau complet des matchs */}
-      <div className="card animate-fade-in" style={{ animationDelay: '0.1s' }}>
+      <div className="bg-white rounded-xl shadow-md p-6 animate-fade-in" style={{ animationDelay: '0.1s' }}>
         <MatchTable />
       </div>
     </div>
