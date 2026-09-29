@@ -3,8 +3,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Match } from "@/lib/utils";
-import { Calendar, Clock, Home, Plane, Beer, CheckCircle, AlertTriangle, Truck } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { Calendar, Clock, Home, Plane, Beer, CheckCircle, AlertTriangle } from "lucide-react";
 
 // Couleurs des salles EHR
 const LOCATION_COLORS: Record<string, string> = {
@@ -23,9 +22,6 @@ const LOCATION_BADGE_COLORS: Record<string, string> = {
   'Kanfen': 'bg-orange-500 text-white',
   'Extérieur': 'bg-gray-500 text-white',
 };
-
-// Couleurs pour le graphique
-const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#06b6d4', '#0ea5e9'];
 
 // Icônes pour domicile/extérieur
 const getMatchIcon = (isHome: boolean | undefined, isAway: boolean | undefined) => {
@@ -125,6 +121,7 @@ export default function BuvettesPage() {
   const [selectedWeekend, setSelectedWeekend] = useState<{saturday: string; sunday: string} | null>(null);
   const [allWeekends, setAllWeekends] = useState<{saturday: string; sunday: string; label: string}[]>([]);
   const [viewMode, setViewMode] = useState<'weekend' | 'all'>('all');
+  const [selectedLocation, setSelectedLocation] = useState<string>('toutes');
   
   const ehrLocations = ['Rodemack', 'Hettange (Hall)', 'Hettange (Poly)', 'Kanfen'];
   
@@ -141,6 +138,12 @@ export default function BuvettesPage() {
   }, []);
 
   const ehrMatches = useMemo(() => matches.filter(m => m.location && ehrLocations.includes(m.location)), [matches, ehrLocations]);
+
+  // Filtre par salle
+  const filteredByLocation = useMemo(() => {
+    if (selectedLocation === 'toutes') return ehrMatches;
+    return ehrMatches.filter(m => m.location === selectedLocation);
+  }, [selectedLocation, ehrMatches]);
 
   useEffect(() => {
     const fetchMatches = async () => {
@@ -174,17 +177,17 @@ export default function BuvettesPage() {
   }, []);
 
   const displayMatches = useMemo(() => {
-    let result = ehrMatches;
+    let result = filteredByLocation;
     if (viewMode === 'weekend' && selectedWeekend) {
       result = result.filter(m => m.date === selectedWeekend.saturday || m.date === selectedWeekend.sunday);
     }
     return result;
-  }, [viewMode, selectedWeekend, ehrMatches]);
+  }, [viewMode, selectedWeekend, filteredByLocation]);
 
   const weekendMatches = useMemo(() => {
     if (!selectedWeekend) return [];
-    return ehrMatches.filter(m => m.date === selectedWeekend.saturday || m.date === selectedWeekend.sunday);
-  }, [selectedWeekend, ehrMatches]);
+    return filteredByLocation.filter(m => m.date === selectedWeekend.saturday || m.date === selectedWeekend.sunday);
+  }, [selectedWeekend, filteredByLocation]);
 
   const matchesByDateAndLocation = useMemo(() => {
     const byDate: Record<string, Record<string, Match[]>> = {};
@@ -240,16 +243,6 @@ export default function BuvettesPage() {
     return summary;
   }, [matchesByDateAndLocation, ehrLocations]);
 
-  const camionnetteStats = useMemo(() => {
-    const stats: Record<string, number> = {};
-    matches.forEach((match) => {
-      if (match.camionnette && match.home_team && ehrLocations.includes(match.location || '')) {
-        stats[match.home_team] = (stats[match.home_team] || 0) + 1;
-      }
-    });
-    return Object.entries(stats).map(([team, count]) => ({ team, count })).sort((a, b) => b.count - a.count);
-  }, [matches, ehrLocations]);
-
   if (isLoading) {
     return (
       <div className="container mx-auto px-4 py-8 animate-pulse">
@@ -267,100 +260,118 @@ export default function BuvettesPage() {
     <div className="container mx-auto px-4 py-8 animate-fade-in">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-blue-800 mb-2">🍺 Gestion des Buvettes</h1>
-        <p className="text-gray-600">Anticipez les besoins en buvette pour le week-end</p>
+        <p className="text-gray-600">
+          Anticipez les besoins en buvette pour le week-end - Détection automatique des créneaux avec matchs consécutifs
+        </p>
       </div>
 
-      {allWeekends.length > 0 && (
-        <div className="bg-white rounded-xl shadow-md p-6 mb-8">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-4 mb-2">
-                <span className="text-sm font-medium text-blue-800">📅 Mode</span>
-                <div className="flex gap-2">
-                  <button onClick={() => setViewMode('all')} className={`px-4 py-2 rounded-lg text-sm font-medium ${viewMode === 'all' ? 'bg-blue-600 text-white shadow-lg' : 'bg-blue-100 text-blue-700'}`}>Toutes les dates</button>
-                  <button onClick={() => setViewMode('weekend')} className={`px-4 py-2 rounded-lg text-sm font-medium ${viewMode === 'weekend' ? 'bg-blue-600 text-white shadow-lg' : 'bg-blue-100 text-blue-700'}`}>Week-end</button>
-                </div>
-              </div>
-              {viewMode === 'weekend' && (
-                <>
-                  <label className="block text-sm font-medium text-blue-800 mb-2">Sélectionnez un week-end</label>
-                  <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
-                    {allWeekends.map((weekend) => {
-                      const isSelected = selectedWeekend?.saturday === weekend.saturday && selectedWeekend?.sunday === weekend.sunday;
-                      const saturdayDate = new Date(weekend.saturday);
-                      const isCurrentMonth = saturdayDate.getMonth() === new Date().getMonth();
-                      return (
-                        <button
-                          key={`${weekend.saturday}-${weekend.sunday}`}
-                          onClick={() => setSelectedWeekend({ saturday: weekend.saturday, sunday: weekend.sunday })}
-                          className={`px-4 py-2 rounded-lg text-sm font-medium ${isSelected ? 'bg-blue-600 text-white shadow-lg ring-2 ring-blue-500' : isCurrentMonth ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}
-                        >
-                          <div className="text-xs opacity-70">{weekend.label.split('(')[1]?.replace(')', '') || ''}</div>
-                          <div className="font-medium">{weekend.label.split('Week-end du ')[1]?.split(' (')[0]}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
+      {/* Filtres */}
+      <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Filtre par mode d'affichage */}
+          <div>
+            <label className="block text-sm font-medium text-blue-800 mb-2">📅 Mode d'affichage</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setViewMode('all')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  viewMode === 'all'
+                    ? 'bg-blue-600 text-white shadow-lg'
+                    : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                }`}
+              >
+                Toutes les dates
+              </button>
+              <button
+                onClick={() => setViewMode('weekend')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  viewMode === 'weekend'
+                    ? 'bg-blue-600 text-white shadow-lg'
+                    : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                }`}
+              >
+                Week-end seulement
+              </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {selectedWeekend && camionnetteStats.length > 0 && (
-        <div className="bg-white rounded-xl shadow-md p-6 mb-8">
-          <h2 className="text-xl font-bold text-blue-800 mb-6 flex items-center gap-2"><Truck className="w-6 h-6" />Réservations de Camionnettes</h2>
-          <div className="space-y-6">
-            <div className="flex flex-wrap gap-4 mb-6">
-              <div className="bg-blue-50 p-4 rounded-lg flex-1 min-w-48">
-                <p className="text-sm text-gray-600 mb-1">Total réservations</p>
-                <p className="text-3xl font-bold text-blue-700">{camionnetteStats.reduce((sum, item) => sum + item.count, 0)}</p>
-              </div>
-              <div className="bg-yellow-50 p-4 rounded-lg flex-1 min-w-48">
-                <p className="text-sm text-gray-600 mb-1">Équipes concernées</p>
-                <p className="text-3xl font-bold text-yellow-700">{camionnetteStats.length}</p>
-              </div>
-            </div>
-            <div className="bg-white p-4 rounded-lg border border-gray-200">
-              <p className="text-sm font-medium text-blue-800 mb-4">Nombre de réservations par équipe</p>
-              <div style={{ height: 300 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={camionnetteStats} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis type="number" stroke="#6b7280" />
-                    <YAxis dataKey="team" type="category" width={150} stroke="#6b7280" tick={{ fontSize: 12 }} />
-                    <Tooltip formatter={(value: number) => [value, 'réservations']} />
-                    <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]}>
-                      {camionnetteStats.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <p className="text-xs text-gray-500 mt-4 text-center">* Seules les équipes ayant réservé une camionnette sont affichées</p>
-            </div>
+          
+          {/* Filtre par salle */}
+          <div>
+            <label className="block text-sm font-medium text-blue-800 mb-2">📍 Filtrer par salle</label>
+            <select
+              value={selectedLocation}
+              onChange={(e) => setSelectedLocation(e.target.value)}
+              className="w-full p-2 border border-blue-200 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="toutes">Toutes les salles EHR</option>
+              {ehrLocations.map((location) => (
+                <option key={location} value={location}>
+                  {location}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
-      )}
+        
+        {/* Sélecteur de week-end (uniquement en mode weekend) */}
+        {viewMode === 'weekend' && allWeekends.length > 0 && (
+          <div className="mt-6">
+            <label className="block text-sm font-medium text-blue-800 mb-2">Sélectionnez un week-end</label>
+            <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
+              {allWeekends.map((weekend) => {
+                const isSelected = selectedWeekend?.saturday === weekend.saturday && selectedWeekend?.sunday === weekend.sunday;
+                const saturdayDate = new Date(weekend.saturday);
+                const isCurrentMonth = saturdayDate.getMonth() === new Date().getMonth();
+                return (
+                  <button
+                    key={`${weekend.saturday}-${weekend.sunday}`}
+                    onClick={() => setSelectedWeekend({ saturday: weekend.saturday, sunday: weekend.sunday })}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium ${isSelected ? 'bg-blue-600 text-white shadow-lg ring-2 ring-blue-500' : isCurrentMonth ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}
+                  >
+                    <div className="text-xs opacity-70">{weekend.label.split('(')[1]?.replace(')', '') || ''}</div>
+                    <div className="font-medium">{weekend.label.split('Week-end du ')[1]?.split(' (')[0]}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
 
       {selectedWeekend && (
         <div className="mb-8">
-          <h2 className="text-xl font-bold text-blue-800 mb-6 flex items-center gap-2"><CheckCircle className="w-6 h-6" />Salles avec créneaux buvette</h2>
+          <h2 className="text-xl font-bold text-blue-800 mb-6 flex items-center gap-2">
+            <CheckCircle className="w-6 h-6" />
+            Salles avec créneaux buvette recommandés
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {ehrLocations.map((location) => {
               const summary = locationSummary[location];
               const totalMatches = summary?.totalMatches || 0;
               const hasConsecutive = summary?.isBuvetteCandidate || false;
-              const consecutiveGroupsByDate = summary?.consecutiveGroupsByDate || {};
-              const totalConsecutive = Object.values(consecutiveGroupsByDate).reduce((sum, groups) => sum + groups.reduce((gSum, g) => gSum + g.length, 0), 0);
+              
+              // Masquer les salles non sélectionnées
+              if (selectedLocation !== 'toutes' && selectedLocation !== location) {
+                return null;
+              }
+              
               return (
-                <div key={location} className={`rounded-xl p-4 ${LOCATION_COLORS[location] || 'bg-white border border-gray-200'} ${hasConsecutive ? 'ring-2 ring-green-500 shadow-lg' : 'opacity-80'}`}>
+                <div
+                  key={location}
+                  className={`rounded-xl p-4 ${LOCATION_COLORS[location] || 'bg-white border border-gray-200'} ${
+                    hasConsecutive ? 'ring-2 ring-green-500 shadow-lg' : 'opacity-80'
+                  }`}
+                >
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-blue-800 text-lg">{location}</h3>
                     {hasConsecutive ? (
-                      <span className="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-bold">✓ Buvette</span>
+                      <span className="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-bold">
+                        ✓ Buvette
+                      </span>
                     ) : (
-                      <span className="bg-gray-300 text-gray-600 px-2 py-1 rounded-full text-xs">Aucun créneau</span>
+                      <span className="bg-gray-300 text-gray-600 px-2 py-1 rounded-full text-xs">
+                        Aucun créneau
+                      </span>
                     )}
                   </div>
                   <div className="space-y-2">
@@ -368,12 +379,6 @@ export default function BuvettesPage() {
                       <span className="text-gray-600">Matchs totaux:</span>
                       <span className="font-semibold text-blue-700">{totalMatches}</span>
                     </div>
-                    {hasConsecutive && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Matchs consécutifs:</span>
-                        <span className="font-semibold text-green-700">{totalConsecutive}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
               );
@@ -399,6 +404,13 @@ export default function BuvettesPage() {
               const isTomorrow = date === tomorrowStr;
               const isCurrentWeekend = selectedWeekend && (date === selectedWeekend.saturday || date === selectedWeekend.sunday);
               const isHighlighted = isToday || isTomorrow || isCurrentWeekend;
+              
+              // Filtrer les dates sans la salle sélectionnée
+              if (selectedLocation !== 'toutes') {
+                const hasSelectedLocation = dateMatches.some(m => m.location === selectedLocation);
+                if (!hasSelectedLocation) return null;
+              }
+              
               return (
                 <div key={date} className={`bg-white rounded-xl shadow-md p-6 ${isHighlighted ? 'ring-2 ring-blue-500' : ''}`}>
                   <div className="mb-4 pb-4 border-b-2 border-blue-200">
@@ -408,15 +420,25 @@ export default function BuvettesPage() {
                       {isToday && <span className="ml-2 bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold">AUJOURD'HUI</span>}
                       {isTomorrow && <span className="ml-2 bg-yellow-600 text-white px-2 py-1 rounded text-xs font-bold">DEMAIN</span>}
                     </h3>
-                    <p className="text-sm text-gray-600 mt-1">{dateMatches.length} match{dateMatches.length > 1 ? 's' : ''} prévu{dateMatches.length > 1 ? 's' : ''}</p>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {dateMatches.length} match{dateMatches.length > 1 ? 's' : ''} prévu{dateMatches.length > 1 ? 's' : ''}
+                    </p>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {Object.entries(locations).map(([location, locationMatches]) => {
+                      // Filtrer les salles non sélectionnées
+                      if (selectedLocation !== 'toutes' && selectedLocation !== location) {
+                        return null;
+                      }
+                      
                       const consecutiveGroups = findConsecutiveGroups(locationMatches);
                       const isBuvetteCandidate = consecutiveGroups.length > 0;
                       const totalConsecutive = consecutiveGroups.reduce((sum, g) => sum + g.length, 0);
                       return (
-                        <div key={location} className={`p-4 rounded-xl ${LOCATION_COLORS[location] || 'bg-white border border-gray-200'} ${isBuvetteCandidate ? 'ring-2 ring-green-400' : ''}`}>
+                        <div
+                          key={location}
+                          className={`p-4 rounded-xl ${LOCATION_COLORS[location] || 'bg-white border border-gray-200'} ${isBuvetteCandidate ? 'ring-2 ring-green-400' : ''}`}
+                        >
                           <div className="flex items-center justify-between mb-3">
                             <h4 className="font-bold text-blue-800 text-lg">{location}</h4>
                             <div className="flex items-center gap-2">
@@ -444,14 +466,21 @@ export default function BuvettesPage() {
                             {locationMatches.map((match, idx) => {
                               const isConsecutive = consecutiveGroups.some(group => group.includes(match));
                               return (
-                                <div key={`${date}-${location}-${idx}`} className={`p-3 rounded-lg border ${isConsecutive ? 'border-green-300 bg-green-50/50' : 'border-blue-100 bg-white/50'}`}>
+                                <div
+                                  key={`${date}-${location}-${idx}`}
+                                  className={`p-3 rounded-lg border ${isConsecutive ? 'border-green-300 bg-green-50/50' : 'border-blue-100 bg-white/50'}`}
+                                >
                                   <div className="flex items-start gap-3">
                                     <div className="flex-shrink-0">{getMatchIcon(match.is_home, match.is_away)}</div>
                                     <div className="flex-1 min-w-0">
-                                      <div className="font-medium text-blue-800 text-sm">{match.home_team} {match.away_team ? 'vs ' : ''}{match.away_team}</div>
+                                      <div className="font-medium text-blue-800 text-sm">
+                                        {match.home_team} {match.away_team ? 'vs ' : ''}{match.away_team}
+                                      </div>
                                       {match.category && <div className="text-xs text-gray-600 mt-1">{match.category}</div>}
                                       <div className="text-xs text-gray-500 mt-1 flex items-center gap-1"><Clock className="w-3 h-3" />{formatTime(match.time)}</div>
-                                      {match.camionnette && <div className="text-xs mt-1"><span className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">🚐 {match.camionnette}</span></div>}
+                                      {match.camionnette && (
+                                        <div className="text-xs mt-1"><span className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">🚐 {match.camionnette}</span></div>
+                                      )}
                                     </div>
                                     {isConsecutive && <div className="flex-shrink-0"><Beer className="w-4 h-4 text-green-600" /></div>}
                                   </div>
@@ -480,9 +509,11 @@ export default function BuvettesPage() {
       <div className="bg-blue-50 rounded-xl p-6 mt-12">
         <h3 className="font-semibold text-blue-800 mb-3 flex items-center gap-2"><AlertTriangle className="w-5 h-5" />Comment utiliser cette page</h3>
         <ul className="text-sm text-blue-700 space-y-2">
+          <li>• Utilisez le filtre par salle pour voir uniquement les matchs d'une salle spécifique</li>
           <li>• Les salles avec un fond vert clair et l'icône ✓ sont des <strong>bons candidats pour ouvrir une buvette</strong></li>
           <li>• Un créneau buvette est détecté quand au moins 2 matchs se succèdent (écart ≤ 2h) dans la même salle</li>
           <li>• Les matchs concernés sont mis en évidence avec l'icône 🍺</li>
+          <li>• Utilisez le sélecteur en haut pour naviguer entre les week-ends</li>
           <li>• Les couleurs des salles: Jaune=Rodemack, Bleu=Hall Hettange, Vert=Poly Hettange, Orange=Kanfen</li>
         </ul>
       </div>
