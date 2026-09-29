@@ -1,4 +1,6 @@
 // app/matches/page.tsx
+"use client";
+
 import MatchTable from "@/components/MatchTable";
 import WeekendMatches from "@/components/WeekendMatches";
 import Link from "next/link";
