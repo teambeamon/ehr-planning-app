@@ -26,6 +26,33 @@ export const getMatches = (): Match[] => {
   return matchesData as Match[];
 };
 
+// Noms d'affichage des équipes
+const TEAM_DISPLAY_NAMES: Record<string, string> = {
+  'Seniors M': 'Seniors Masculins',
+  'Seniors F1': 'Seniors Filles 1',
+  'Seniors F2': 'Seniors Filles 2',
+  'M17': '17 ans Garçons',
+  'F17': '17 ans Filles',
+  'M15': '15 ans Garçons',
+  'F15': '15 ans Filles',
+  'M13': '13 ans Garçons',
+  'F13': '13 ans Filles',
+  'M11': '11 ans Garçons',
+  'F11': '11 ans Filles'
+};
+
+// Liste des équipes EHR (noms normalisés)
+const EHR_TEAM_NAMES = new Set([
+  'Seniors M', 'Seniors F1', 'Seniors F2',
+  'M17', 'F17',
+  'M15', 'F15',
+  'M13', 'F13',
+  'M11', 'F11'
+]);
+
+// Salles EHR
+const EHR_LOCATIONS = ['Rodemack', 'Hettange (Hall)', 'Hettange (Poly)', 'Kanfen'];
+
 export const getFilteredMatches = (filters: {
   team?: string;
   location?: string;
@@ -33,17 +60,17 @@ export const getFilteredMatches = (filters: {
   season?: string;
 }): Match[] => {
   return matchesData.filter((match: Match) => {
-    // Filtre par équipe (recherche dans home_team ou away_team, avec includes pour plus de flexibilité)
+    // Filtre par équipe (recherche dans home_team ou away_team)
+    // Seules les équipes EHR doivent apparaître dans le filtre
     const teamFilterPass = !filters.team || 
-      (match.home_team && match.home_team.toLowerCase().includes(filters.team.toLowerCase())) ||
-      (match.away_team && match.away_team.toLowerCase().includes(filters.team.toLowerCase())) ||
-      (match.category && match.category.toLowerCase().includes(filters.team.toLowerCase()));
+      (match.home_team && EHR_TEAM_NAMES.has(match.home_team) && match.home_team.toLowerCase().includes(filters.team.toLowerCase())) ||
+      (match.away_team && EHR_TEAM_NAMES.has(match.away_team) && match.away_team.toLowerCase().includes(filters.team.toLowerCase()));
     
-    // Filtre par lieu (correspondance exacte pour les salles EHR)
+    // Filtre par lieu (salles EHR + Extérieur)
     const locationFilterPass = !filters.location || match.location === filters.location;
     
     // Filtre par catégorie
-    const categoryFilterPass = !filters.category || match.category === filters.category;
+    const categoryFilterPass = !filters.category || (match.category && match.category.toLowerCase().includes(filters.category.toLowerCase()));
     
     // Filtre par saison
     const seasonFilterPass = !filters.season || match.season === filters.season;
@@ -52,44 +79,37 @@ export const getFilteredMatches = (filters: {
   });
 };
 
-// Liste des équipes EHR
-const EHR_TEAM_NAMES = new Set([
-  'Seniors M', 'Seniors F1', 'Seniors F2',
-  'M17 departementale', 'M17 region',
-  'F17 CDF', 'F17 departementale',
-  'M15 region', 'M15 departementale',
-  'F15 region', 'F15 departementale',
-  'M13 region', 'M13 departementale',
-  'F13 departementale',
-  'M11 interdepartementale',
-  'F11 departementale'
-]);
-
 // Fonctions utilitaires pour extraire les valeurs uniques
 export const getTeams = (): string[] => {
   // Ne retourner que les équipes EHR
   const ehrTeamsSet = new Set<string>();
   matchesData.forEach((match: Match) => {
-    if (match.is_home && match.home_team && EHR_TEAM_NAMES.has(match.home_team)) {
+    if (match.home_team && EHR_TEAM_NAMES.has(match.home_team)) {
       ehrTeamsSet.add(match.home_team);
     }
-    if (match.is_away && match.away_team && EHR_TEAM_NAMES.has(match.away_team)) {
+    if (match.away_team && EHR_TEAM_NAMES.has(match.away_team)) {
       ehrTeamsSet.add(match.away_team);
     }
   });
-  return Array.from(ehrTeamsSet).sort();
+  // Retourner dans l'ordre standard
+  const standardOrder = ['Seniors M', 'Seniors F1', 'Seniors F2', 'M17', 'F17', 'M15', 'F15', 'M13', 'F13', 'M11', 'F11'];
+  return standardOrder.filter(team => ehrTeamsSet.has(team));
 };
 
 export const getLocations = (): string[] => {
   // Salles EHR + Extérieur
-  const ehrLocations = ['Hettange (Hall)', 'Hettange (Poly)', 'Rodemack', 'Kanfen'];
   const locationsSet = new Set<string>();
   matchesData.forEach((match: Match) => {
-    if (match.location && (ehrLocations.includes(match.location) || match.location === 'Extérieur')) {
+    if (match.location && EHR_LOCATIONS.includes(match.location)) {
+      locationsSet.add(match.location);
+    }
+    if (match.location === 'Extérieur') {
       locationsSet.add(match.location);
     }
   });
-  return Array.from(locationsSet).sort();
+  // Retourner dans l'ordre standard
+  return ['Rodemack', 'Hettange (Hall)', 'Hettange (Poly)', 'Kanfen', 'Extérieur']
+    .filter(loc => locationsSet.has(loc));
 };
 
 export const getCategories = (): string[] => {
@@ -111,8 +131,6 @@ export const getSeasons = (): string[] => {
 // Statistiques
 export const getStats = () => {
   // Salles EHR uniquement
-  const ehrLocations = ['Hettange (Hall)', 'Hettange (Poly)', 'Rodemack', 'Kanfen'];
-  
   const stats = {
     total: matchesData.length,
     home: matchesData.filter((m: Match) => m.is_home).length,
@@ -126,13 +144,14 @@ export const getStats = () => {
     lastUpdated: matchesData.length > 0 && matchesData[0].last_updated ? matchesData[0].last_updated : null
   };
 
-  // Compter uniquement les matchs EHR (domicile) pour les stats par équipe
+  // Compter uniquement les matchs EHR pour les stats par équipe
   matchesData.forEach((match: Match) => {
-    if (match.is_home && match.home_team) {
-      stats.byTeam[match.home_team] = (stats.byTeam[match.home_team] || 0) + 1;
+    if (match.is_home && match.home_team && EHR_TEAM_NAMES.has(match.home_team)) {
+      const displayName = TEAM_DISPLAY_NAMES[match.home_team] || match.home_team;
+      stats.byTeam[displayName] = (stats.byTeam[displayName] || 0) + 1;
     }
     // Filtrer uniquement les salles EHR
-    if (match.location && ehrLocations.includes(match.location)) {
+    if (match.location && EHR_LOCATIONS.includes(match.location)) {
       stats.byLocation[match.location] = (stats.byLocation[match.location] || 0) + 1;
     }
     if (match.category) stats.byCategory[match.category] = (stats.byCategory[match.category] || 0) + 1;
@@ -144,8 +163,7 @@ export const getStats = () => {
 
 // Statistiques pour les locations EHR uniquement
 export const getEHRLocationsStats = () => {
-  const ehrLocations = ['Hettange (Hall)', 'Hettange (Poly)', 'Rodemack', 'Kanfen'];
-  const homeMatches = matchesData.filter((m: Match) => m.is_home && m.location && ehrLocations.includes(m.location));
+  const homeMatches = matchesData.filter((m: Match) => m.is_home && m.location && EHR_LOCATIONS.includes(m.location));
   
   const byLocation: Record<string, number> = {};
   homeMatches.forEach((match: Match) => {
@@ -161,7 +179,6 @@ export const getEHRLocationsStats = () => {
 };
 
 // Fonction pour obtenir les matchs du week-end actuel
-// Tant que le dimanche n'est pas passé, on reste sur le week-end actuel
 export const getWeekendMatches = (): Match[] => {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
@@ -202,4 +219,10 @@ export const getWeekendMatches = (): Match[] => {
   return matchesData.filter((match: Match) => {
     return match.date === saturdayStr || match.date === sundayStr;
   });
+};
+
+// Fonction utilitaire pour obtenir le nom d'affichage d'une équipe
+export const getTeamDisplayName = (team: string | null): string => {
+  if (!team) return '';
+  return TEAM_DISPLAY_NAMES[team] || team;
 };
