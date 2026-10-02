@@ -28,9 +28,6 @@ export async function initializeMatchesTable() {
           away_team TEXT,
           time TEXT,
           location TEXT NOT NULL,
-          is_home INTEGER DEFAULT 0,
-          is_away INTEGER DEFAULT 0,
-          is_internal INTEGER DEFAULT 0,
           match_type TEXT DEFAULT 'Championnat',
           category TEXT,
           coach TEXT,
@@ -79,13 +76,12 @@ export async function saveAllMatches(matches: any[]) {
     
     if (matches.length === 0) return;
 
-    // Requête sans match_display (on le calcule à la lecture)
+    // Requête avec uniquement les colonnes existantes dans la DB
     const insertSql = `
       INSERT INTO ${MATCHES_TABLE} (
         date, day, home_team, away_team, time, location,
-        is_home, is_away, is_internal, match_type, category, coach,
-        camionnette, season, last_updated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        match_type, category, coach, camionnette, season, last_updated
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     for (const match of matches) {
@@ -98,9 +94,6 @@ export async function saveAllMatches(matches: any[]) {
           match.away_team || null,
           match.time || null,
           match.location || null,
-          match.is_home ? 1 : 0,
-          match.is_away ? 1 : 0,
-          match.is_internal ? 1 : 0,
           match.match_type || 'Championnat',
           match.category || null,
           match.coach || null,
@@ -119,18 +112,34 @@ export async function saveAllMatches(matches: any[]) {
 
 // Helper pour convertir les rows en Match
 function rowToMatch(row: any): Match {
+  const EHR_TEAMS = new Set(['Seniors M', 'Seniors F1', 'Seniors F2', 'M17', 'F17', 'M15', 'F15', 'M13', 'F13', 'M11', 'F11']);
+  const EHR_LOCATIONS = ['Rodemack', 'Hettange (Hall)', 'Hettange (Poly)', 'Kanfen'];
+  
+  const isEHRTeam = (name: string | null): boolean => {
+    if (!name) return false;
+    return EHR_TEAMS.has(name) || /\bEHR\b/i.test(name);
+  };
+  
+  const location = row.location || null;
+  const homeTeam = row.home_team || null;
+  const awayTeam = row.away_team || null;
+  
+  const isHome = location !== null && location !== 'Extérieur' && EHR_LOCATIONS.includes(location);
+  const isAway = location === 'Extérieur';
+  const isInternal = isHome && homeTeam && isEHRTeam(homeTeam) && awayTeam && isEHRTeam(awayTeam);
+  
   return {
     id: row.id,
     date: row.date || null,
     day: row.day || null,
-    home_team: row.home_team || null,
-    away_team: row.away_team || null,
-    match_display: computeMatchDisplay(row.home_team, row.away_team),
+    home_team: homeTeam,
+    away_team: awayTeam,
+    match_display: computeMatchDisplay(homeTeam, awayTeam),
     time: row.time || null,
-    location: row.location || null,
-    is_home: Boolean(row.is_home || 0),
-    is_away: Boolean(row.is_away || 0),
-    is_internal: Boolean(row.is_internal || 0),
+    location: location,
+    is_home: isHome,
+    is_away: isAway,
+    is_internal: isInternal,
     match_type: row.match_type || null,
     category: row.category || null,
     coach: row.coach || null,
@@ -368,27 +377,28 @@ export async function getStatsFromDB() {
   }
   try {
     const totalR = await executeWithFallback(`SELECT COUNT(*) as c FROM ${MATCHES_TABLE}`, []);
-    const homeR = await executeWithFallback(`SELECT COUNT(*) as c FROM ${MATCHES_TABLE} WHERE is_home = 1`, []);
-    const awayR = await executeWithFallback(`SELECT COUNT(*) as c FROM ${MATCHES_TABLE} WHERE is_away = 1`, []);
-    const internalR = await executeWithFallback(`SELECT COUNT(*) as c FROM ${MATCHES_TABLE} WHERE is_internal = 1`, []);
+    const ehrLocs = ['Rodemack', 'Hettange (Hall)', 'Hettange (Poly)', 'Kanfen'];
+    const homeR = await executeWithFallback(`SELECT COUNT(*) as c FROM ${MATCHES_TABLE} WHERE location IN (${ehrLocs.map(() => '?').join(',')})`, ehrLocs);
+    const awayR = await executeWithFallback(`SELECT COUNT(*) as c FROM ${MATCHES_TABLE} WHERE location = 'Extérieur'`, []);
     const camR = await executeWithFallback(`SELECT COUNT(*) as c FROM ${MATCHES_TABLE} WHERE camionnette IS NOT NULL AND camionnette != ''`, []);
     const ehrTeams = new Set(EHR_TEAMS);
-    const ehrLocs = ['Rodemack', 'Hettange (Hall)', 'Hettange (Poly)', 'Kanfen'];
     const total = totalR.rows[0]?.c || 0;
     const home = homeR.rows[0]?.c || 0;
     const away = awayR.rows[0]?.c || 0;
-    const internal = internalR.rows[0]?.c || 0;
     const withCamionnette = camR.rows[0]?.c || 0;
-    const teamR = await executeWithFallback(
-      `SELECT home_team, COUNT(*) as c FROM ${MATCHES_TABLE} WHERE is_home = 1 AND home_team IS NOT NULL GROUP BY home_team`, []
-    );
+    
+    // Pour internal et byTeam/byLocation, on charge tous les matchs et on calcule en mémoire
+    const allMatches = await getAllMatchesFromDB();
+    const internal = allMatches.filter(m => m.is_internal).length;
     const byTeam: Record<string, number> = {};
-    teamR.rows.forEach((r: any) => { if (ehrTeams.has(r.home_team)) { const dn = TEAM_DISPLAY[r.home_team] || r.home_team; byTeam[dn] = (byTeam[dn] || 0) + r.c; } });
-    const locR = await executeWithFallback(
-      `SELECT location, COUNT(*) as c FROM ${MATCHES_TABLE} WHERE is_home = 1 AND location IS NOT NULL GROUP BY location`, []
-    );
+    allMatches.filter(m => m.is_home && m.home_team && ehrTeams.has(m.home_team)).forEach(m => {
+      const dn = TEAM_DISPLAY[m.home_team!] || m.home_team!;
+      byTeam[dn] = (byTeam[dn] || 0) + 1;
+    });
     const byLocation: Record<string, number> = {};
-    locR.rows.forEach((r: any) => { if (ehrLocs.includes(r.location)) byLocation[r.location] = r.c; });
+    allMatches.filter(m => m.is_home && m.location && ehrLocs.includes(m.location)).forEach(m => {
+      byLocation[m.location!] = (byLocation[m.location!] || 0) + 1;
+    });
     const catR = await executeWithFallback(
       `SELECT category, COUNT(*) as c FROM ${MATCHES_TABLE} WHERE category IS NOT NULL AND category != '' GROUP BY category`, []
     );
@@ -419,8 +429,8 @@ export async function getEHRLocationsStatsFromDB() {
   try {
     const ehrLocs = ['Rodemack', 'Hettange (Hall)', 'Hettange (Poly)', 'Kanfen'];
     const result = await executeWithFallback(
-      `SELECT location, COUNT(*) as c FROM ${MATCHES_TABLE} WHERE is_home = 1 AND location IS NOT NULL GROUP BY location`,
-      []
+      `SELECT location, COUNT(*) as c FROM ${MATCHES_TABLE} WHERE location IN (${ehrLocs.map(() => '?').join(',')}) GROUP BY location`,
+      ehrLocs
     );
     const byLocation: Record<string, number> = {};
     let totalHome = 0;
