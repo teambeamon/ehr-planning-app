@@ -162,6 +162,12 @@ function getOpponentFromText(text: string, ehrTeam: string): {opponent: string |
   return { opponent: cleaned, isHome: true };
 }
 
+// Type pour les colonnes
+interface ColumnInfo {
+  team: string;
+  category: string;
+}
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
@@ -183,7 +189,7 @@ export async function POST(request: Request) {
     const categoryRow = data[12] || [];
 
     // Map: colonne -> {team, category}
-    const columns: Map<number, {team: string; category: string}> = new Map();
+    const columns: Map<number, ColumnInfo> = new Map();
     for (let col = 5; col < teamsRow.length; col++) {
       const rawTeam = String(teamsRow[col] || '');
       const team = normalizeTeamName(rawTeam);
@@ -221,8 +227,10 @@ export async function POST(request: Request) {
         }
       }
 
-      // Parcourir chaque colonne d'équipe
-      for (const [col, colInfo] of columns) {
+      // Parcourir chaque colonne d'équipe - convertir Map en Array pour éviter les problèmes d'itération
+      const columnsArray = Array.from(columns.entries());
+      
+      for (const [col, colInfo] of columnsArray) {
         let matchText = '';
         let locationColor = 'FFFFFF';
 
