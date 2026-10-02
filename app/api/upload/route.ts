@@ -1,7 +1,5 @@
 // app/api/upload/route.ts
 import { NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import { join } from "path";
 import * as XLSX from "xlsx";
 
 // Mapping couleur RGB -> Salle
@@ -227,7 +225,7 @@ export async function POST(request: Request) {
         }
       }
 
-      // Parcourir chaque colonne d'équipe - convertir Map en Array pour éviter les problèmes d'itération
+      // Parcourir chaque colonne d'équipe
       const columnsArray = Array.from(columns.entries());
       
       for (const [col, colInfo] of columnsArray) {
@@ -319,15 +317,14 @@ export async function POST(request: Request) {
       return true;
     });
 
-    const outputDir = join(process.cwd(), 'data');
-    const outputFile = join(outputDir, 'matches.json');
-    await mkdir(outputDir, { recursive: true });
-    await writeFile(outputFile, JSON.stringify(uniqueMatches, null, 2));
-
+    // Retourner les données au client - c'est au frontend de les sauvegarder
+    // Dans Vercel, on ne peut pas écrire dans le filesystem (read-only)
+    // Solution alternative: retourner les données et utiliser une API externe ou GitHub API
     return NextResponse.json({ 
       success: true, 
       message: "Fichier traité avec succès.",
-      matchesCount: uniqueMatches.length
+      matchesCount: uniqueMatches.length,
+      matches: uniqueMatches
     });
 
   } catch (error: any) {

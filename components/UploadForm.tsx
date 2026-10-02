@@ -12,6 +12,7 @@ export default function UploadForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [matchesCount, setMatchesCount] = useState<number | null>(null);
   const router = useRouter();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -19,6 +20,7 @@ export default function UploadForm() {
       setFile(e.target.files[0]);
       setError(null);
       setSuccessMessage(null);
+      setMatchesCount(null);
     }
   };
 
@@ -33,10 +35,10 @@ export default function UploadForm() {
     setIsLoading(true);
     setError(null);
     
-    const formData = new FormData();
-    formData.append("file", file);
-
     try {
+      const formData = new FormData();
+      formData.append("file", file);
+
       const response = await fetch("/api/upload", {
         method: "POST",
         body: formData,
@@ -48,8 +50,21 @@ export default function UploadForm() {
       }
 
       const result = await response.json();
+      
+      // Sauvegarder les données dans localStorage (temporaire)
+      if (result.matches && result.matches.length > 0) {
+        localStorage.setItem('lastUploadedMatches', JSON.stringify(result.matches));
+        localStorage.setItem('lastUploadedDate', new Date().toISOString());
+      }
+      
       setSuccessMessage(result.message);
-      router.refresh();
+      setMatchesCount(result.matchesCount);
+      
+      // Rafraîchir la page après un délai
+      setTimeout(() => {
+        router.refresh();
+      }, 1500);
+
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -71,6 +86,9 @@ export default function UploadForm() {
           className="mt-1"
           disabled={isLoading}
         />
+        <p className="text-sm text-gray-500 mt-1">
+          Sélectionnez un fichier Excel contenant le planning des matchs.
+        </p>
       </div>
 
       {error && (
@@ -83,7 +101,38 @@ export default function UploadForm() {
       {successMessage && (
         <div className="flex items-center gap-2 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
           <CheckCircle className="h-4 w-4 flex-shrink-0 text-green-600" />
-          <span>{successMessage}</span>
+          <span>
+            {successMessage}
+            {matchesCount !== null && (
+              <span className="ml-2 font-semibold">{matchesCount} matchs trouvés</span>
+            )}
+          </span>
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 text-sm text-blue-800">
+          <strong>⚠️ Attention :</strong> Les données ont été traitées mais ne peuvent pas être sauvegardées directement sur Vercel.
+          <br />
+          <strong>Solution :</strong> Téléchargez le fichier JSON généré ci-dessous et placez-le dans le dossier <code>data/matches.json</code> de votre dépôt GitHub, puis faites un commit.
+          <br />
+          <Button 
+            className="mt-2"
+            onClick={async () => {
+              const storedMatches = localStorage.getItem('lastUploadedMatches');
+              if (storedMatches) {
+                const blob = new Blob([storedMatches], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'matches.json';
+                a.click();
+                URL.revokeObjectURL(url);
+              }
+            }}
+          >
+            Télécharger matches.json
+          </Button>
         </div>
       )}
 
@@ -96,7 +145,7 @@ export default function UploadForm() {
         ) : (
           <>
             <Upload className="mr-2 h-4 w-4" />
-            Uploader et mettre à jour
+            Uploader et traiter
           </>
         )}
       </Button>
