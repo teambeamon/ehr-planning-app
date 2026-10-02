@@ -14,55 +14,95 @@ const COLOR_TO_LOCATION: Record<string, string> = {
   'none': 'Extérieur'
 };
 
-// Normalisation des noms d'équipes
-const TEAM_MAP: Record<string, string> = {
-  'SENIORS HR': 'Seniors M', 'SENIORS G': 'Seniors M', 'SENIORS': 'Seniors M', 'SG': 'Seniors M',
-  'SENIORS FILLES HR 1': 'Seniors F1', 'SENIORS FILLES 1': 'Seniors F1', 'SF1': 'Seniors F1',
-  'SENIORS FILLES HR 2': 'Seniors F2', 'SENIORS FILLES 2': 'Seniors F2', 'SF2': 'Seniors F2',
-  '- 17 ans G (Dépt)': 'M17 departementale', '17 ans G (Dépt)': 'M17 departementale',
-  '- 17 ans G (Région)': 'M17 region', '17 ans G (Région)': 'M17 region',
-  '- 17 ans F équip 1 ( CDF)': 'F17 CDF', '17 ans F équip 1 ( CDF)': 'F17 CDF',
-  '- 17 ans F équip 2 ( Dépt)': 'F17 departementale', '17 ans F équip 2 ( Dépt)': 'F17 departementale',
-  '- 15 ans  M (Région)': 'M15 region', '15 ans  M (Région)': 'M15 region',
-  '- 15 ans  (Dépt)': 'M15 departementale', '15 ans (Dépt)': 'M15 departementale',
-  '- 15 ans F (Région)': 'F15 region', '15 ans F (Région)': 'F15 region',
-  '- 15 ans F (Dépt)': 'F15 departementale', '15 ans F (Dépt)': 'F15 departementale',
-  '- 13 ans M (Région)': 'M13 region', '- 13 ans M (Dépt)': 'M13 departementale',
-  '- 13 ans F (Dépt)': 'F13 departementale',
-  '- 11 ans  Masculins (InterDépt)': 'M11 interdepartementale',
-  '11 ans Féminines': 'F11 departementale', '- 11 ans Féminines': 'F11 departementale',
-  'EHR 1': 'F17 CDF', 'EHR 2': 'F17 departementale'
-};
+// Normalisation des noms d'équipes - utiliser une approche plus robuste
+function normalizeTeamName(name: string): string {
+  if (!name) return '';
+  
+  // Nettoyer le texte
+  let cleaned = String(name)
+    .replace(/\r/g, '')
+    .replace(/\n/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^[\s-]*/, '')
+    .trim();
+  
+  // Supprimer les parenthèses et leur contenu pour simplifier
+  cleaned = cleaned.replace(/\s*\([^)]*\)/g, '').trim();
+  
+  // Remplacer les variations courantes
+  cleaned = cleaned
+    .replace(/^17 ans F.*/i, 'F17')
+    .replace(/^17 ans G.*/i, 'M17')
+    .replace(/^15 ans F.*/i, 'F15')
+    .replace(/^15 ans M.*/i, 'M15')
+    .replace(/^13 ans F.*/i, 'F13')
+    .replace(/^13 ans M.*/i, 'M13')
+    .replace(/^11 ans F.*/i, 'F11')
+    .replace(/^11 ans Masculins.*/i, 'M11')
+    .replace(/Seniors Filles/i, 'SF')
+    .replace(/Seniors HR/i, 'SM')
+    .replace(/Seniors G/i, 'SM')
+    .replace(/SENIORS/i, 'SM')
+    .replace(/Féminines/i, 'F')
+    .replace(/Masculins?/i, 'M')
+    .replace(/Garçons?/i, 'M')
+    .replace(/ans/i, '')
+    .replace(/EHR/i, '')
+    .replace(/HR/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  // Mapping final
+  const mapping: Record<string, string> = {
+    'SM': 'Seniors M',
+    'SF 1': 'Seniors F1', 'SF1': 'Seniors F1',
+    'SF 2': 'Seniors F2', 'SF2': 'Seniors F2',
+    'M17': 'M17',
+    'F17': 'F17',
+    'M15': 'M15',
+    'F15': 'F15',
+    'M13': 'M13',
+    'F13': 'F13',
+    'M11': 'M11',
+    'F11': 'F11'
+  };
+  
+  return mapping[cleaned] || cleaned;
+}
 
+function getCategoryFromText(text: string): string {
+  if (!text) return '';
+  const cleaned = String(text).replace(/\r/g, '').replace(/\n/g, ' ').trim();
+  if (cleaned.includes('CDF') || cleaned.includes('Championnat de France')) return 'CDF';
+  if (cleaned.includes('Région') || cleaned.includes('Regional')) return 'Régional';
+  if (cleaned.includes('Dépt') || cleaned.includes('Departement') || cleaned.includes('Départementale')) return 'Départemental';
+  if (cleaned.includes('InterDépt') || cleaned.includes('Interdepartement')) return 'Interdépartemental';
+  return cleaned.substring(0, 50);
+}
+
+// Équipes EHR valides
 const EHR_TEAMS = new Set([
   'Seniors M', 'Seniors F1', 'Seniors F2',
-  'M17 departementale', 'M17 region',
-  'F17 CDF', 'F17 departementale',
-  'M15 region', 'M15 departementale',
-  'F15 region', 'F15 departementale',
-  'M13 region', 'M13 departementale',
-  'F13 departementale',
-  'M11 interdepartementale',
-  'F11 departementale'
+  'M17', 'F17',
+  'M15', 'F15',
+  'M13', 'F13',
+  'M11', 'F11'
 ]);
-
-function cleanText(str: string): string {
-  if (!str) return '';
-  return String(str).replace(/\r/g, '').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-function normalizeTeam(name: string): string {
-  if (!name) return '';
-  let cleaned = String(name).trim().replace(/^[\s-]*/, '').replace(/\s+/g, ' ').trim();
-  return TEAM_MAP[cleaned] || cleaned;
-}
 
 function isEHRTeam(name: string): boolean {
   if (!name) return false;
   const cleaned = String(name).trim();
   if (EHR_TEAMS.has(cleaned)) return true;
   if (/\bEHR\b/i.test(cleaned) || /\bHR\b/i.test(cleaned)) return true;
-  return false;
+  // Vérifier si c'est une équipe EHR normalisée
+  const normalized = normalizeTeamName(cleaned);
+  return EHR_TEAMS.has(normalized);
+}
+
+function cleanText(str: string): string {
+  if (!str) return '';
+  return String(str).replace(/\r/g, '').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function formatDate(dateStr: string): string | null {
@@ -89,17 +129,76 @@ function getCellColor(sheet: XLSX.WorkSheet, row: number, col: number): string {
   return 'FFFFFF';
 }
 
-function isMatchCell(str: string): boolean {
-  if (!str || String(str).trim() === '') return false;
+function isNonMatchCell(str: string): boolean {
+  if (!str || String(str).trim() === '') return true;
   const lower = String(str).toLowerCase().trim();
   const exclude = ['journée', 'report', 'exempt', 'dispo', 'réservation', 'coach', 'date', 'salles',
     'n°', 'bad', 'non dispo', 'match contre', 'uniquement', 'tournoi', 'inversion',
     'demande de report', 'refus', 'à placer', 'retrait', 'bloquée', 'skate',
-    'camionnette', 'disponible', 'libre', 'à planifier', 'date bloquée'];
-  if (exclude.some(kw => lower.includes(kw))) return false;
-  if (lower === 'à' || lower === 'a' || lower === 'vs' || lower === 'match') return false;
-  if (/^\d+$/.test(lower)) return false;
-  return true;
+    'camionnette', 'disponible', 'libre', 'à planifier', 'date bloquée', 'amical'];
+  if (exclude.some(kw => lower.includes(kw))) return true;
+  if (lower === 'à' || lower === 'vs' || lower === 'match') return true;
+  if (/^\d+$/.test(lower)) return true;
+  // Si ça contient plusieurs noms d'équipes séparés par des virgules, ignorer
+  if (lower.includes(',') && lower.split(',').length > 1) return true;
+  if (lower.includes('et') && lower.split('et').length > 1) return true;
+  return false;
+}
+
+function getOpponentFromText(text: string, ehrTeam: string): {opponent: string | null; isHome: boolean} {
+  // Nettoyer le texte
+  let cleaned = cleanText(text);
+  
+  // Supprimer l'heure
+  cleaned = cleaned.replace(/\s*à\s*\d{1,2}[h:]*\d{2}/i, '').trim();
+  
+  // Si le texte commence par "EHR" ou contient "EHR" en premier
+  if (/^EHR/i.test(cleaned) || /^EHR\s+/i.test(cleaned)) {
+    // Exemple: "EHR - Villers" -> opponent = Villers, isHome = true
+    const opponent = cleaned
+      .replace(/^EHR\s*[-vs]?\s*/i, '')
+      .replace(/^HR\s*[-vs]?\s*/i, '')
+      .trim();
+    return { opponent: opponent || null, isHome: true };
+  }
+  
+  // Si le texte finit par "EHR" ou contient "vs EHR"
+  if (/\s*[-vs]?\s*EHR\s*$/i.test(cleaned) || /\s*[-vs]?\s*EHR$/i.test(cleaned)) {
+    // Exemple: "Villers - EHR" -> opponent = Villers, isHome = false
+    const opponent = cleaned
+      .replace(/\s*[-vs]?\s*EHR\s*$/i, '')
+      .replace(/\s*[-vs]?\s*EHR$/i, '')
+      .trim();
+    return { opponent: opponent || null, isHome: false };
+  }
+  
+  // Si le texte contient "EHR" au milieu
+  if (/(^|\s)EHR(\s|$)/i.test(cleaned)) {
+    // Exemple: "Villers vs EHR" ou "EHR vs Villers"
+    const parts = cleaned.split(/[-vs]/i).map(p => p.trim());
+    if (parts.length >= 2) {
+      for (let i = 0; i < parts.length; i++) {
+        if (isEHRTeam(parts[i]) || /EHR/i.test(parts[i])) {
+          // EHR est dans cette partie
+          if (i === 0) {
+            // EHR est en premier -> match à domicile
+            const opponentParts = parts.slice(1);
+            return { opponent: opponentParts.join(' '), isHome: true };
+          } else {
+            // EHR n'est pas en premier -> match à l'extérieur
+            const opponentParts = parts.slice(0, i);
+            return { opponent: opponentParts.join(' '), isHome: false };
+          }
+        }
+      }
+    }
+    // Par défaut
+    return { opponent: cleaned, isHome: true };
+  }
+  
+  // Sinon, le texte est probablement le nom de l'opponent
+  // Vérifier si c'est un match à domicile (la couleur de la cellule l'indiquera)
+  return { opponent: cleaned, isHome: true };
 }
 
 export async function POST(request: Request) {
@@ -120,16 +219,15 @@ export async function POST(request: Request) {
     // Lire les infos des colonnes (équipes en ligne 11, catégories en ligne 12)
     const teamsRow = data[11] || [];
     const categoryRow = data[12] || [];
-    const coachRow = data[13] || [];
 
-    // Map: colonne -> {team, category, coach}
-    const columns: Map<number, {team: string; category: string; coach: string}> = new Map();
+    // Map: colonne -> {team, category}
+    const columns: Map<number, {team: string; category: string}> = new Map();
     for (let col = 5; col < teamsRow.length; col++) {
-      const team = normalizeTeam(String(teamsRow[col] || ''));
-      const category = cleanText(String(categoryRow[col] || ''));
-      const coach = cleanText(String(coachRow[col] || ''));
+      const rawTeam = String(teamsRow[col] || '');
+      const team = normalizeTeamName(rawTeam);
+      const category = getCategoryFromText(String(categoryRow[col] || ''));
       if (team && !team.startsWith('-')) {
-        columns.set(col, { team, category, coach });
+        columns.set(col, { team, category });
       }
     }
 
@@ -153,12 +251,12 @@ export async function POST(request: Request) {
         const cC = cleanText(String(data[r]?.[2] || ''));
         const cD = cleanText(String(data[r]?.[3] || ''));
         if (cC && !dateCamionnette) {
-          const normalized = normalizeTeam(cC.replace(/^Camionnette\s+/gi, '').trim());
-          if (normalized && isEHRTeam(normalized)) dateCamionnette = normalized;
+          const team = normalizeTeamName(cC.replace(/^Camionnette\s+/gi, '').trim());
+          if (team && EHR_TEAMS.has(team)) dateCamionnette = team;
         }
         if (cD && !dateCamionnette) {
-          const normalized = normalizeTeam(cD.replace(/^Camionnette\s+/gi, '').trim());
-          if (normalized && isEHRTeam(normalized)) dateCamionnette = normalized;
+          const team = normalizeTeamName(cD.replace(/^Camionnette\s+/gi, '').trim());
+          if (team && EHR_TEAMS.has(team)) dateCamionnette = team;
         }
       }
 
@@ -166,7 +264,6 @@ export async function POST(request: Request) {
       for (const [col, colInfo] of columns) {
         let matchText = '';
         let locationColor = 'FFFFFF';
-        let matchTime: string | null = null;
 
         // Lire les 3 lignes pour ce match
         for (let offset = 0; offset < 3; offset++) {
@@ -179,7 +276,7 @@ export async function POST(request: Request) {
           const cellStr = String(cellValue).trim();
           
           // Si c'est une cellule de match valide
-          if (isMatchCell(cellStr)) {
+          if (!isNonMatchCell(cellStr)) {
             if (!matchText) matchText = cellStr;
             
             // Obtenir la couleur
@@ -203,77 +300,42 @@ export async function POST(request: Request) {
         let isAway = false;
         let finalLocation = location;
 
-        // Nettoyer le texte du match
-        let matchCleaned = cleaned;
-        if (time) matchCleaned = cleaned.replace(/\s*à\s*\d{1,2}[h:]\d{2}/i, '').trim();
-        matchCleaned = cleanText(matchCleaned).replace(/\bà\b/gi, '').replace(/\s+/g, ' ').trim();
-
-        // Vérifier si c'est un match à domicile ou extérieur
-        if (matchCleaned.includes(' vs ') || matchCleaned.includes(' - ')) {
-          const separator = matchCleaned.includes(' vs ') ? ' vs ' : ' - ';
-          const parts = matchCleaned.split(separator).map(p => p.trim());
-          if (parts.length >= 2) {
-            const t1 = normalizeTeam(parts[0]);
-            const t2 = normalizeTeam(parts.slice(1).join(' '));
-            const t1IsEHR = isEHRTeam(t1);
-            const t2IsEHR = isEHRTeam(t2);
-
-            if (t1IsEHR && !t2IsEHR) {
-              homeTeam = colInfo.team;
-              awayTeam = t2;
-              isHome = true;
-              isAway = false;
-              finalLocation = location;
-            } else if (t2IsEHR && !t1IsEHR) {
-              homeTeam = t1;
-              awayTeam = colInfo.team;
-              isHome = false;
-              isAway = true;
-              finalLocation = 'Extérieur';
-            } else if (t1IsEHR && t2IsEHR) {
-              homeTeam = t1;
-              awayTeam = t2;
-              isHome = true;
-              isAway = false;
-              finalLocation = location;
-            } else {
-              homeTeam = colInfo.team;
-              awayTeam = t1;
-              isHome = true;
-              isAway = false;
-            }
-          }
-        } else {
-          // Pas de séparateur - vérifier si c'est un nom d'équipe adverse
-          const possibleOpponent = normalizeTeam(matchCleaned);
-          const isOppEHR = isEHRTeam(possibleOpponent);
-
-          if (isOppEHR && possibleOpponent !== colInfo.team) {
+        // Utiliser la fonction de détection d'opponent
+        const opponentResult = getOpponentFromText(cleaned, colInfo.team);
+        
+        if (opponentResult.opponent && opponentResult.opponent !== '') {
+          // On a trouvé un opponent
+          const normalizedOpponent = normalizeTeamName(opponentResult.opponent);
+          
+          if (opponentResult.isHome) {
             homeTeam = colInfo.team;
-            awayTeam = possibleOpponent;
+            awayTeam = normalizedOpponent;
             isHome = true;
             isAway = false;
             finalLocation = location;
-          } else if (!isOppEHR && possibleOpponent.length >= 2) {
-            if (location !== 'Extérieur' && location !== 'none') {
-              homeTeam = colInfo.team;
-              awayTeam = possibleOpponent;
-              isHome = true;
-              isAway = false;
-              finalLocation = location;
-            } else {
-              homeTeam = possibleOpponent;
-              awayTeam = colInfo.team;
-              isHome = false;
-              isAway = true;
-              finalLocation = 'Extérieur';
-            }
           } else {
+            homeTeam = normalizedOpponent;
+            awayTeam = colInfo.team;
+            isHome = false;
+            isAway = true;
+            finalLocation = 'Extérieur';
+          }
+        } else {
+          // Pas d'opponent détecté - vérifier la couleur
+          if (location !== 'Extérieur' && location !== 'none') {
+            // Si la couleur indique une salle EHR, c'est probablement un match à domicile
+            // sans opponent spécifié (ex: "Match à 14h00")
+            homeTeam = colInfo.team;
+            awayTeam = null;
+            isHome = true;
+            isAway = false;
+            finalLocation = location;
+          } else {
+            // Sinon ignorer
             continue;
           }
         }
 
-        if (isAway && !isHome) finalLocation = 'Extérieur';
         if (!homeTeam || homeTeam === '') continue;
 
         matches.push({
@@ -289,7 +351,6 @@ export async function POST(request: Request) {
           is_home: isHome,
           is_away: isAway,
           is_internal: isEHRTeam(homeTeam) && (awayTeam ? isEHRTeam(awayTeam) : false),
-          coach: colInfo.coach,
           season: season,
           last_updated: lastUpdated,
           camionnette: (isHome && !isAway && dateCamionnette) ? dateCamionnette : null
