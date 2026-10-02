@@ -13,6 +13,7 @@ export default function UploadForm() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [matchesCount, setMatchesCount] = useState<number | null>(null);
+  const [committedToGitHub, setCommittedToGitHub] = useState(false);
   const router = useRouter();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -21,6 +22,7 @@ export default function UploadForm() {
       setError(null);
       setSuccessMessage(null);
       setMatchesCount(null);
+      setCommittedToGitHub(false);
     }
   };
 
@@ -59,6 +61,7 @@ export default function UploadForm() {
       
       setSuccessMessage(result.message);
       setMatchesCount(result.matchesCount);
+      setCommittedToGitHub(result.committedToGitHub || false);
       
       // Rafraîchir la page après un délai
       setTimeout(() => {
@@ -110,15 +113,16 @@ export default function UploadForm() {
         </div>
       )}
 
-      {successMessage && (
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 text-sm text-blue-800">
-          <strong>⚠️ Attention :</strong> Les données ont été traitées mais ne peuvent pas être sauvegardées directement sur Vercel.
+      {/* Message différent selon si commit GitHub a réussi */}
+      {successMessage && !committedToGitHub && (
+        <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200 text-sm text-yellow-800">
+          <strong>⚠️ Action requise :</strong> Les données ont été traitées mais n'ont pas pu être sauvegardées automatiquement sur GitHub.
           <br />
-          <strong>Solution :</strong> Téléchargez le fichier JSON généré ci-dessous et placez-le dans le dossier <code>data/matches.json</code> de votre dépôt GitHub, puis faites un commit.
+          <strong>Pour finaliser :</strong> Téléchargez le fichier JSON ci-dessous et placez-le dans <code>data/matches.json</code> de votre dépôt GitHub, puis faites un commit.
           <br />
           <Button 
             className="mt-2"
-            onClick={async () => {
+            onClick={() => {
               const storedMatches = localStorage.getItem('lastUploadedMatches');
               if (storedMatches) {
                 const blob = new Blob([storedMatches], { type: 'application/json' });
@@ -131,7 +135,23 @@ export default function UploadForm() {
               }
             }}
           >
+            <CheckCircle className="mr-2 h-4 w-4" />
             Télécharger matches.json
+          </Button>
+        </div>
+      )}
+
+      {successMessage && committedToGitHub && (
+        <div className="bg-green-50 p-4 rounded-lg border border-green-200 text-sm text-green-800">
+          <strong>✅ Succès !</strong> Le fichier a été traité et sauvegardé automatiquement sur GitHub.
+          <br />
+          Les données seront disponibles après le déploiement Vercel (quelques minutes).
+          <br />
+          <Button 
+            className="mt-2"
+            onClick={() => router.refresh()}
+          >
+            Rafraîchir la page
           </Button>
         </div>
       )}
