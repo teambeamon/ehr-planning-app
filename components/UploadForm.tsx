@@ -13,7 +13,6 @@ export default function UploadForm() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [matchesCount, setMatchesCount] = useState<number | null>(null);
-  const [committedToGitHub, setCommittedToGitHub] = useState(false);
   const router = useRouter();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -22,7 +21,6 @@ export default function UploadForm() {
       setError(null);
       setSuccessMessage(null);
       setMatchesCount(null);
-      setCommittedToGitHub(false);
     }
   };
 
@@ -53,17 +51,10 @@ export default function UploadForm() {
 
       const result = await response.json();
       
-      // Sauvegarder les données dans localStorage (temporaire)
-      if (result.matches && result.matches.length > 0) {
-        localStorage.setItem('lastUploadedMatches', JSON.stringify(result.matches));
-        localStorage.setItem('lastUploadedDate', new Date().toISOString());
-      }
-      
       setSuccessMessage(result.message);
       setMatchesCount(result.matchesCount);
-      setCommittedToGitHub(result.committedToGitHub || false);
       
-      // Rafraîchir la page après un délai
+      // Rafraîchir la page après un délai pour voir les nouvelles données
       setTimeout(() => {
         router.refresh();
       }, 1500);
@@ -107,45 +98,16 @@ export default function UploadForm() {
           <span>
             {successMessage}
             {matchesCount !== null && (
-              <span className="ml-2 font-semibold">{matchesCount} matchs trouvés</span>
+              <span className="ml-2 font-semibold">{matchesCount} matchs enregistrés</span>
             )}
           </span>
         </div>
       )}
 
-      {/* Message différent selon si commit GitHub a réussi */}
-      {successMessage && !committedToGitHub && (
-        <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200 text-sm text-yellow-800">
-          <strong>⚠️ Action requise :</strong> Les données ont été traitées mais n'ont pas pu être sauvegardées automatiquement sur GitHub.
-          <br />
-          <strong>Pour finaliser :</strong> Téléchargez le fichier JSON ci-dessous et placez-le dans <code>data/matches.json</code> de votre dépôt GitHub, puis faites un commit.
-          <br />
-          <Button 
-            className="mt-2"
-            onClick={() => {
-              const storedMatches = localStorage.getItem('lastUploadedMatches');
-              if (storedMatches) {
-                const blob = new Blob([storedMatches], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'matches.json';
-                a.click();
-                URL.revokeObjectURL(url);
-              }
-            }}
-          >
-            <CheckCircle className="mr-2 h-4 w-4" />
-            Télécharger matches.json
-          </Button>
-        </div>
-      )}
-
-      {successMessage && committedToGitHub && (
+      {/* Message de succès - tout est automatique maintenant */}
+      {successMessage && (
         <div className="bg-green-50 p-4 rounded-lg border border-green-200 text-sm text-green-800">
-          <strong>✅ Succès !</strong> Le fichier a été traité et sauvegardé automatiquement sur GitHub.
-          <br />
-          Les données seront disponibles après le déploiement Vercel (quelques minutes).
+          <strong>✅ Succès !</strong> Le fichier a été traité et les données sont maintenant disponibles.
           <br />
           <Button 
             className="mt-2"
@@ -160,7 +122,7 @@ export default function UploadForm() {
         {isLoading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Upload en cours...
+            Traitement en cours...
           </>
         ) : (
           <>

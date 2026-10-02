@@ -3,6 +3,6 @@ import { NextResponse } from "next/server";
 import { getTeams } from "@/lib/utils";
 
 export async function GET() {
-  const teams = getTeams();
+  const teams = await getTeams();
   return NextResponse.json(teams);
 }

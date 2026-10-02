@@ -3,6 +3,6 @@ import { NextResponse } from "next/server";
 import { getLocations } from "@/lib/utils";
 
 export async function GET() {
-  const locations = getLocations();
+  const locations = await getLocations();
   return NextResponse.json(locations);
 }

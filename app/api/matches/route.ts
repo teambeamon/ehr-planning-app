@@ -11,6 +11,6 @@ export async function GET(request: Request) {
     season: searchParams.get("season") || undefined,
   };
 
-  const matches = getFilteredMatches(filters);
+  const matches = await getFilteredMatches(filters);
   return NextResponse.json(matches);
 }

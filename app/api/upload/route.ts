@@ -1,6 +1,7 @@
 // app/api/upload/route.ts
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
+import { saveAllMatches, initializeMatchesTable } from "@/lib/db-matches";
 
 // Mapping couleur RGB -> Salle
 const COLOR_TO_LOCATION: Record<string, string> = {
@@ -166,68 +167,12 @@ interface ColumnInfo {
   category: string;
 }
 
-// Fonction pour commiter sur GitHub
-async function commitToGitHub(matches: any[], token: string, repo: string, branch: string = 'main') {
-  try {
-    // Récupérer le dernier commit
-    const apiUrl = `https://api.github.com/repos/${repo}/contents/data/matches.json`;
-    
-    const headers = {
-      'Authorization': `token ${token}`,
-      'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': 'EHR-Planning-Agent'
-    };
-    
-    // D'abord, essayer de récupérer le SHA du fichier existant
-    let sha: string | null = null;
-    try {
-      const getResponse = await fetch(apiUrl, { headers });
-      if (getResponse.ok) {
-        const fileData = await getResponse.json();
-        sha = fileData.sha;
-      }
-    } catch (e) {
-      // Fichier n'existe pas encore
-      sha = null;
-    }
-    
-    // Préparer le contenu
-    const content = JSON.stringify(matches, null, 2);
-    const encodedContent = Buffer.from(content).toString('base64');
-    
-    // Créer ou mettre à jour le fichier
-    const method = sha ? 'PUT' : 'PUT';
-    const body = JSON.stringify({
-      message: `Mise à jour du planning - ${new Date().toLocaleString('fr-FR')}`,
-      content: encodedContent,
-      branch: branch,
-      ...(sha ? { sha } : {})
-    });
-    
-    const response = await fetch(apiUrl, {
-      method: 'PUT',
-      headers: {
-        ...headers,
-        'Content-Type': 'application/json'
-      },
-      body
-    });
-    
-    if (!response.ok) {
-      const error = await response.json();
-      console.error('GitHub API error:', error);
-      return { success: false, error: error.message || 'Erreur GitHub API' };
-    }
-    
-    return { success: true };
-  } catch (error: any) {
-    console.error('Error committing to GitHub:', error);
-    return { success: false, error: error.message };
-  }
-}
-
+// Fonction principale de parsing
 export async function POST(request: Request) {
   try {
+    // Initialiser la table
+    await initializeMatchesTable();
+
     const formData = await request.formData();
     const file = formData.get("file") as File;
     if (!file) return NextResponse.json({ error: "Aucun fichier fourni." }, { status: 400 });
@@ -239,7 +184,8 @@ export async function POST(request: Request) {
     const data: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
 
     // Lire les métadonnées
-    const lastUpdated = data[0]?.[0]?.toString().replace('MAJ le ', '')?.trim() || null;
+    const lastUpdatedRaw = data[0]?.[0];
+    const lastUpdated = lastUpdatedRaw ? String(lastUpdatedRaw).replace('MAJ le ', '').trim() : null;
     const season = data[0]?.[5]?.toString().trim() || '2026-2027';
 
     // Lire les infos des colonnes
@@ -377,24 +323,14 @@ export async function POST(request: Request) {
       return true;
     });
 
-    // Essayer de commiter sur GitHub si un token est disponible
-    const githubToken = process.env.GITHUB_TOKEN;
-    const githubRepo = process.env.GITHUB_REPO || 'teambeamon/ehr-planning-app';
-    
-    let committedToGitHub = false;
-    if (githubToken && githubToken !== 'your-github-token') {
-      const commitResult = await commitToGitHub(uniqueMatches, githubToken, githubRepo);
-      committedToGitHub = commitResult.success;
-    }
+    // Sauvegarder dans Turso
+    await saveAllMatches(uniqueMatches);
 
     return NextResponse.json({ 
       success: true, 
-      message: committedToGitHub 
-        ? "Fichier traité et sauvegardé sur GitHub avec succès!" 
-        : "Fichier traité avec succès. Téléchargez les données pour les sauvegarder.",
+      message: `Fichier traité avec succès! ${uniqueMatches.length} matchs enregistrés dans la base de données.`,
       matchesCount: uniqueMatches.length,
       matches: uniqueMatches,
-      committedToGitHub
     });
 
   } catch (error: any) {
