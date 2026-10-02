@@ -26,7 +26,6 @@ export async function initializeMatchesTable() {
           day TEXT,
           home_team TEXT NOT NULL,
           away_team TEXT,
-          match_display TEXT,
           time TEXT,
           location TEXT NOT NULL,
           is_home INTEGER DEFAULT 0,
@@ -57,8 +56,14 @@ export async function initializeMatchesTable() {
     console.log("Table matches initialisée avec succès");
   } catch (error) {
     console.error("Erreur lors de l'initialisation:", error);
-    throw error;
   }
+}
+
+// Helper pour calculer match_display à partir des équipes
+function computeMatchDisplay(homeTeam: string | null, awayTeam: string | null): string {
+  if (!homeTeam) return '';
+  if (!awayTeam) return homeTeam;
+  return `${homeTeam} vs ${awayTeam}`;
 }
 
 // Sauvegarder tous les matchs
@@ -71,26 +76,37 @@ export async function saveAllMatches(matches: any[]) {
 
   try {
     await client.execute({ sql: `DELETE FROM ${MATCHES_TABLE}`, args: [] });
+    
     if (matches.length === 0) return;
 
+    // Requête sans match_display (on le calcule à la lecture)
     const insertSql = `
       INSERT INTO ${MATCHES_TABLE} (
-        date, day, home_team, away_team, match_display, time, location,
+        date, day, home_team, away_team, time, location,
         is_home, is_away, is_internal, match_type, category, coach,
         camionnette, season, last_updated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     for (const match of matches) {
       await client.execute({
         sql: insertSql,
         args: [
-          match.date || null, match.day || null, match.home_team || null,
-          match.away_team || null, match.match_display || null, match.time || null,
-          match.location || null, match.is_home ? 1 : 0, match.is_away ? 1 : 0,
-          match.is_internal ? 1 : 0, match.match_type || 'Championnat',
-          match.category || null, match.coach || null, match.camionnette || null,
-          match.season || '2026-2027', match.last_updated || null
+          match.date || null,
+          match.day || null,
+          match.home_team || null,
+          match.away_team || null,
+          match.time || null,
+          match.location || null,
+          match.is_home ? 1 : 0,
+          match.is_away ? 1 : 0,
+          match.is_internal ? 1 : 0,
+          match.match_type || 'Championnat',
+          match.category || null,
+          match.coach || null,
+          match.camionnette || null,
+          match.season || '2026-2027',
+          match.last_updated || null
         ],
       });
     }
@@ -109,7 +125,7 @@ function rowToMatch(row: any): Match {
     day: row.day || null,
     home_team: row.home_team || null,
     away_team: row.away_team || null,
-    match_display: row.match_display || null,
+    match_display: computeMatchDisplay(row.home_team, row.away_team),
     time: row.time || null,
     location: row.location || null,
     is_home: Boolean(row.is_home || 0),
@@ -306,7 +322,7 @@ export async function getSeasonsFromDB(): Promise<string[]> {
 // Récupérer la dernière mise à jour
 export async function getLastUpdatedFromDB(): Promise<string | null> {
   if (!isTursoConfigured() || !client) {
-    return inMemoryMatches.length > 0 ? (inMemoryMatches[0].last_updated || null) : null;
+    return inMemoryMatches.length > 0 ? (inMemoryMatches[0]?.last_updated || null) : null;
   }
   try {
     const result = await executeWithFallback(
@@ -347,7 +363,7 @@ export async function getStatsFromDB() {
     inMemoryMatches.forEach(m => { if (m.category) byCategory[m.category] = (byCategory[m.category] || 0) + 1; });
     const byMatchType: Record<string, number> = {};
     inMemoryMatches.forEach(m => { if (m.match_type) byMatchType[m.match_type] = (byMatchType[m.match_type] || 0) + 1; });
-    const lastUpdated = inMemoryMatches.length > 0 ? inMemoryMatches[0].last_updated : null;
+    const lastUpdated = inMemoryMatches.length > 0 ? (inMemoryMatches[0]?.last_updated || null) : null;
     return { total, home, away, internal, withCamionnette, byTeam, byLocation, byCategory, byMatchType, lastUpdated };
   }
   try {
