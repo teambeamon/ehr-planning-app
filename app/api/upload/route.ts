@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
-import XLSX from "xlsx";
+import * as XLSX from "xlsx";
 
 // Mapping couleur RGB -> Salle
 const COLOR_TO_LOCATION: Record<string, string> = {
@@ -77,12 +77,12 @@ function getCategoryFromText(text: string): string {
   if (cleaned.includes('CDF') || cleaned.includes('Championnat de France')) return 'CDF';
   if (cleaned.includes('Région') || cleaned.includes('Regional')) return 'Régional';
   if (cleaned.includes('Dépt') || cleaned.includes('Departement') || cleaned.includes('Départementale')) return 'Départemental';
-  if (cleaned.includes('InterDépt') || cleaned.includes('Interdepartement')) return 'Interdépartemental';
+  if (cleaned.includes('InterDépt') || cleaned.includes('Interdépartemental')) return 'Interdépartemental';
   return cleaned.substring(0, 50);
 }
 
 // Équipes EHR valides
-const EHR_TEAMS = new Set([
+const EHR_TEAMS = new Set<string>([
   'Seniors M', 'Seniors F1', 'Seniors F2',
   'M17', 'F17',
   'M15', 'F15',
@@ -94,7 +94,7 @@ function isEHRTeam(name: string): boolean {
   if (!name) return false;
   const cleaned = String(name).trim();
   if (EHR_TEAMS.has(cleaned)) return true;
-  if (/\bEHR\b/i.test(cleaned) || /\bHR\b/i.test(cleaned)) return true;
+  if (/\bEHR\b/i.test(cleaned)) return true;
   // Vérifier si c'est une équipe EHR normalisée
   const normalized = normalizeTeamName(cleaned);
   return EHR_TEAMS.has(normalized);
@@ -210,7 +210,7 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const workbook = XLSX.read(buffer, { cellStyles: true, type: 'array' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const data = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
+    const data = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false }) as any[][];
 
     // Lire les métadonnées
     const lastUpdated = data[0]?.[0]?.toString().replace('MAJ le ', '')?.trim() || null;
