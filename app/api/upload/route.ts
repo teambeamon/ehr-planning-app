@@ -27,30 +27,39 @@ function normalizeTeamName(name: string): string {
     .trim();
   cleaned = cleaned.replace(/^[\s-]*/, '').trim();
   cleaned = cleaned.replace(/\s*\([^)]*\)/g, '').trim();
+  
+  // Normaliser les noms d'équipes AVANT de supprimer EHR/HR
   cleaned = cleaned
-    .replace(/EHR\s*[-vs]?\s*/gi, '')
-    .replace(/HR\s*[-vs]?\s*/gi, '')
+    .replace(/Seniors Filles\s*HR\s*1/i, 'Seniors F1')
+    .replace(/Seniors Filles\s*1/i, 'Seniors F1')
+    .replace(/Seniors Filles\s*HR\s*2/i, 'Seniors F2')
+    .replace(/Seniors Filles\s*2/i, 'Seniors F2')
+    .replace(/Seniors\s*HR/i, 'Seniors M')
+    .replace(/Seniors\s*G/i, 'Seniors M')
+    .replace(/^18 ans F.*/i, 'F18')
+    .replace(/^18 ans [MG].*/i, 'M18')
     .replace(/^17 ans F.*/i, 'F17')
     .replace(/^17 ans [MG].*/i, 'M17')
     .replace(/^15 ans F.*/i, 'F15')
     .replace(/^15 ans [MG].*/i, 'M15')
+    .replace(/^15 ans\s*/i, 'M15')
     .replace(/^13 ans F.*/i, 'F13')
     .replace(/^13 ans [MG].*/i, 'M13')
+    .replace(/^13 ans\s*/i, 'M13')
     .replace(/^11 ans F.*/i, 'F11')
     .replace(/^11 ans [MG].*/i, 'M11')
-    .replace(/^18 ans F.*/i, 'F18')
-    .replace(/^18 ans [MG].*/i, 'M18')
-    .replace(/Seniors Filles\s*1/i, 'Seniors F1')
-    .replace(/Seniors Filles\s*2/i, 'Seniors F2')
-    .replace(/Seniors HR/i, 'Seniors M')
-    .replace(/SENIORS/i, 'Seniors M')
+    .replace(/^11 ans\s*/i, 'M11')
     .replace(/Féminines/i, 'F')
+    .replace(/Féminine/i, 'F')
     .replace(/Masculins?/i, 'M')
+    .replace(/Masculin/i, 'M')
     .replace(/Garçons?/i, 'M')
-    .replace(/EHR/i, '')
-    .replace(/HR/i, '')
+    .replace(/Garçon/i, 'M')
+    .replace(/EHR/gi, '')
+    .replace(/HR/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
+  
   const mapping: Record<string, string> = {
     'SM': 'Seniors M',
     'SF1': 'Seniors F1', 'Seniors F1': 'Seniors F1',
@@ -59,7 +68,10 @@ function normalizeTeamName(name: string): string {
     'M17': 'M17', 'F17': 'F17', 'M15': 'M15', 'F15': 'F15',
     'M13': 'M13', 'F13': 'F13', 'M11': 'M11', 'F11': 'F11'
   };
-  return mapping[cleaned] || cleaned;
+  
+  const result = mapping[cleaned] || cleaned;
+  // Nettoyage final
+  return result.replace(/\s+/g, ' ').trim();
 }
 
 function getCategoryFromText(text: string): string {
