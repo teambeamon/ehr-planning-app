@@ -18,6 +18,7 @@ export async function initializeMatchesTable() {
   }
 
   try {
+    // Créer la table si elle n'existe pas
     await client.execute({
       sql: `
         CREATE TABLE IF NOT EXISTS ${MATCHES_TABLE} (
@@ -30,8 +31,6 @@ export async function initializeMatchesTable() {
           location TEXT NOT NULL,
           match_type TEXT DEFAULT 'Championnat',
           category TEXT,
-          coach TEXT,
-          camionnette TEXT,
           season TEXT DEFAULT '2026-2027',
           last_updated TEXT,
           created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -39,6 +38,23 @@ export async function initializeMatchesTable() {
       `,
       args: [],
     });
+
+    // Ajouter les colonnes manquantes si elles n'existent pas
+    const columnsToAdd = [
+      { name: 'coach', type: 'TEXT' },
+      { name: 'camionnette', type: 'TEXT' }
+    ];
+    
+    for (const col of columnsToAdd) {
+      try {
+        await client.execute({
+          sql: `ALTER TABLE ${MATCHES_TABLE} ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}`,
+          args: [],
+        });
+      } catch (error) {
+        console.log(`Colonne ${col.name} déjà existante ou erreur:`, error);
+      }
+    }
 
     await client.execute({
       sql: `CREATE INDEX IF NOT EXISTS idx_matches_date ON ${MATCHES_TABLE}(date)`,
