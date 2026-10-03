@@ -27,34 +27,25 @@ export async function initializeMatchesTable() {
           day TEXT,
           home_team TEXT NOT NULL,
           away_team TEXT,
+          match_display TEXT,
           time TEXT,
           location TEXT NOT NULL,
           match_type TEXT DEFAULT 'Championnat',
           category TEXT,
           season TEXT DEFAULT '2026-2027',
           last_updated TEXT,
+          coach TEXT,
+          camionnette TEXT,
+          is_home INTEGER DEFAULT 0,
+          is_away INTEGER DEFAULT 0,
+          is_internal INTEGER DEFAULT 0,
+          original_team TEXT,
+          original_column INTEGER,
           created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
       `,
       args: [],
     });
-
-    // Ajouter les colonnes manquantes si elles n'existent pas
-    const columnsToAdd = [
-      { name: 'coach', type: 'TEXT' },
-      { name: 'camionnette', type: 'TEXT' }
-    ];
-    
-    for (const col of columnsToAdd) {
-      try {
-        await client.execute({
-          sql: `ALTER TABLE ${MATCHES_TABLE} ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}`,
-          args: [],
-        });
-      } catch (error) {
-        console.log(`Colonne ${col.name} déjà existante ou erreur:`, error);
-      }
-    }
 
     await client.execute({
       sql: `CREATE INDEX IF NOT EXISTS idx_matches_date ON ${MATCHES_TABLE}(date)`,
@@ -100,21 +91,9 @@ export async function saveAllMatches(matches: any[]) {
     const existingColumns = new Set(columnsResult.rows.map((r: any) => r.name));
     
     // Construire la requête INSERT dynamiquement avec seulement les colonnes existantes
-    const baseColumns = ['date', 'day', 'home_team', 'away_team', 'time', 'location', 'match_type', 'category', 'season', 'last_updated'];
-    const optionalColumns = [
-      { name: 'coach', default: null },
-      { name: 'camionnette', default: null }
-    ];
-    
-    const columnsToInsert = baseColumns.filter(col => existingColumns.has(col));
+    const allColumns = ['date', 'day', 'home_team', 'away_team', 'match_display', 'time', 'location', 'match_type', 'category', 'season', 'last_updated', 'coach', 'camionnette', 'is_home', 'is_away', 'is_internal', 'original_team', 'original_column'];
+    const columnsToInsert = allColumns.filter(col => existingColumns.has(col));
     const placeholders = columnsToInsert.map(() => '?').join(', ');
-    
-    // Ajouter les colonnes optionnelles si elles existent
-    for (const col of optionalColumns) {
-      if (existingColumns.has(col.name)) {
-        columnsToInsert.push(col.name);
-      }
-    }
     
     const insertSql = `
       INSERT INTO ${MATCHES_TABLE} (
@@ -130,6 +109,7 @@ export async function saveAllMatches(matches: any[]) {
           case 'day': args.push(match.day || null); break;
           case 'home_team': args.push(match.home_team || null); break;
           case 'away_team': args.push(match.away_team || null); break;
+          case 'match_display': args.push(match.match_display || null); break;
           case 'time': args.push(match.time || null); break;
           case 'location': args.push(match.location || null); break;
           case 'match_type': args.push(match.match_type || 'Championnat'); break;
@@ -138,6 +118,11 @@ export async function saveAllMatches(matches: any[]) {
           case 'last_updated': args.push(match.last_updated || null); break;
           case 'coach': args.push(match.coach || null); break;
           case 'camionnette': args.push(match.camionnette || null); break;
+          case 'is_home': args.push(match.is_home ? 1 : 0); break;
+          case 'is_away': args.push(match.is_away ? 1 : 0); break;
+          case 'is_internal': args.push(match.is_internal ? 1 : 0); break;
+          case 'original_team': args.push(match.original_team || null); break;
+          case 'original_column': args.push(match.original_column || null); break;
         }
       }
       
@@ -167,9 +152,10 @@ function rowToMatch(row: any): Match {
   const homeTeam = row.home_team || null;
   const awayTeam = row.away_team || null;
   
-  const isHome = location !== null && location !== 'Extérieur' && EHR_LOCATIONS.includes(location);
-  const isAway = location === 'Extérieur';
-  const isInternal = isHome && homeTeam && isEHRTeam(homeTeam) && awayTeam && isEHRTeam(awayTeam);
+  // Convertir les booléens stockés en INTEGER
+  const isHome = row.is_home ? (row.is_home === 1 || row.is_home === true) : (location !== null && location !== 'Extérieur' && EHR_LOCATIONS.includes(location));
+  const isAway = row.is_away ? (row.is_away === 1 || row.is_away === true) : (location === 'Extérieur');
+  const isInternal = row.is_internal ? (row.is_internal === 1 || row.is_internal === true) : (isHome && homeTeam && isEHRTeam(homeTeam) && awayTeam && isEHRTeam(awayTeam));
   
   return {
     id: row.id,
@@ -177,7 +163,7 @@ function rowToMatch(row: any): Match {
     day: row.day || null,
     home_team: homeTeam,
     away_team: awayTeam,
-    match_display: computeMatchDisplay(homeTeam, awayTeam),
+    match_display: row.match_display || computeMatchDisplay(homeTeam, awayTeam),
     time: row.time || null,
     location: location,
     is_home: isHome,
@@ -189,6 +175,8 @@ function rowToMatch(row: any): Match {
     camionnette: row.camionnette || null,
     season: row.season || null,
     last_updated: row.last_updated || null,
+    original_team: row.original_team || null,
+    original_column: row.original_column || null,
   };
 }
 

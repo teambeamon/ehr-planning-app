@@ -2,6 +2,8 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { saveAllMatches, initializeMatchesTable } from "@/lib/db-matches";
+import { initializeUploadHistoryTable, saveUploadToHistory, getLastUpload, getUploadSnapshot } from "@/lib/db-upload-history";
+import { createHash } from "crypto";
 
 // Mapping couleur RGB -> Salle
 const COLOR_TO_LOCATION: Record<string, string> = {
@@ -394,24 +396,111 @@ async function parseExcelFile(buffer: Buffer): Promise<any[]> {
   return uniqueMatches;
 }
 
+// Helper pour calculer les différences entre deux ensembles de matchs
+function computeChanges(prevMatches: any[], newMatches: any[]) {
+  const prevByKey = new Map<string, any>();
+  const newByKey = new Map<string, any>();
+  
+  // Créer une clé unique pour chaque match
+  const makeKey = (m: any) => `${m.date}-${m.home_team}-${m.away_team}-${m.time || ''}`;
+  
+  newMatches.forEach(m => {
+    const key = makeKey(m);
+    newByKey.set(key, m);
+  });
+  
+  prevMatches.forEach(m => {
+    const key = makeKey(m);
+    prevByKey.set(key, m);
+  });
+  
+  const added: any[] = [];
+  const removed: any[] = [];
+  const unchanged: any[] = [];
+  
+  // Trouver les matchs ajoutés et supprimés
+  for (const [key, newMatch] of Array.from(newByKey.entries())) {
+    if (!prevByKey.has(key)) {
+      added.push(newMatch);
+    } else {
+      const prevMatch = prevByKey.get(key);
+      // Comparer les propriétés importantes
+      const isSame = 
+        prevMatch.date === newMatch.date &&
+        prevMatch.home_team === newMatch.home_team &&
+        prevMatch.away_team === newMatch.away_team &&
+        prevMatch.time === newMatch.time &&
+        prevMatch.location === newMatch.location;
+      
+      if (isSame) {
+        unchanged.push(newMatch);
+      } else {
+        added.push(newMatch);
+      }
+    }
+  }
+  
+  for (const [key, prevMatch] of Array.from(prevByKey.entries())) {
+    if (!newByKey.has(key)) {
+      removed.push(prevMatch);
+    }
+  }
+  
+  return { added, removed, unchanged };
+}
+
 export async function POST(request: Request) {
   try {
     await initializeMatchesTable();
+    await initializeUploadHistoryTable();
     
     const formData = await request.formData();
     const file = formData.get("file") as File;
     if (!file) return NextResponse.json({ error: "Aucun fichier fourni." }, { status: 400 });
 
     const buffer = Buffer.from(await file.arrayBuffer());
+    const fileHash = createHash('md5').update(buffer).digest('hex');
+    const filename = file.name;
+    
     const matches = await parseExcelFile(buffer);
+    
+    // Récupérer le dernier upload pour calculer les changements
+    const lastUpload = await getLastUpload();
+    let changes: { added: any[], removed: any[], unchanged: any[] } | null = null;
+    
+    if (lastUpload) {
+      const prevSnapshot = await getUploadSnapshot(lastUpload.file_hash);
+      if (prevSnapshot) {
+        try {
+          const prevMatches = JSON.parse(prevSnapshot);
+          changes = computeChanges(prevMatches, matches);
+        } catch (e) {
+          console.error("Erreur parse snapshot:", e);
+        }
+      }
+    }
 
     await saveAllMatches(matches);
+    
+    // Sauvegarder dans l'historique
+    const snapshot = JSON.stringify(matches);
+    const season = matches.length > 0 ? matches[0].season || 'Inconnu' : 'Inconnu';
+    const lastUpdated = matches.length > 0 ? matches[0].last_updated || null : null;
+    
+    await saveUploadToHistory(filename, season, lastUpdated || '', matches.length, fileHash, snapshot);
 
     return NextResponse.json({ 
       success: true, 
       message: `Fichier traité avec succès! ${matches.length} matchs enregistrés dans la base de données.`,
       matchesCount: matches.length,
       matches: matches,
+      changes: changes ? {
+        added: changes.added.length,
+        removed: changes.removed.length,
+        unchanged: changes.unchanged.length,
+        addedMatches: changes.added.slice(0, 10), // Limiter à 10 pour la réponse
+        removedMatches: changes.removed.slice(0, 10),
+      } : null,
     });
 
   } catch (error: any) {
