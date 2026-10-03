@@ -27,8 +27,6 @@ function normalizeTeamName(name: string): string {
     .trim();
   cleaned = cleaned.replace(/^[\s-]*/, '').trim();
   cleaned = cleaned.replace(/\s*\([^)]*\)/g, '').trim();
-  
-  // Normaliser les noms d'équipes AVANT de supprimer EHR/HR
   cleaned = cleaned
     .replace(/Seniors Filles\s*HR\s*1/i, 'Seniors F1')
     .replace(/Seniors Filles\s*1/i, 'Seniors F1')
@@ -59,7 +57,6 @@ function normalizeTeamName(name: string): string {
     .replace(/HR/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
-  
   const mapping: Record<string, string> = {
     'SM': 'Seniors M',
     'SF1': 'Seniors F1', 'Seniors F1': 'Seniors F1',
@@ -68,9 +65,7 @@ function normalizeTeamName(name: string): string {
     'M17': 'M17', 'F17': 'F17', 'M15': 'M15', 'F15': 'F15',
     'M13': 'M13', 'F13': 'F13', 'M11': 'M11', 'F11': 'F11'
   };
-  
   const result = mapping[cleaned] || cleaned;
-  // Nettoyage final
   return result.replace(/\s+/g, ' ').trim();
 }
 
@@ -132,14 +127,15 @@ function isNonMatchCell(str: string): boolean {
   if (!str || String(str).trim() === '') return true;
   const lower = String(str).toLowerCase().trim();
   const exclude = ['journée', 'report', 'exempt', 'dispo', 'réservation', 'coach', 'date', 'salles',
-    'n°', 'bad', 'non dispo', 'match contre', 'uniquement', 'tournoi', 'inversion',
-    'demande de report', 'refus', 'à placer', 'retrait', 'bloquée', 'skate',
+    'n°', 'bad', 'non dispo', 'match contre', 'tournoi', 'inversion',
+    'demande de report', 'refus', 'à placer', 'retrait', 'bloquée',
     'camionnette', 'disponible', 'libre', 'à planifier', 'date bloquée', 'amical',
     'forfait', 'poly non dispo', 'hall et poly non dispo', 'hall non dispo',
-    'fch vide', 'festiva', 'basket', 'volley'];
+    'fch vide', 'festiva', 'basket', 'volley', 'match'];
   if (exclude.some(kw => lower.includes(kw))) return true;
-  if (lower === 'à' || lower === 'vs' || lower === 'match') return true;
-  if (/^\d+$/.test(lower)) return true;
+  if (lower === 'à' || lower === 'vs') return true;
+  if (/^\d+$/.test(lower)) return false; // NE PAS exclure les numéros (1, 2, 3)
+  if (/^[\s-]+$/.test(lower)) return true;
   return false;
 }
 
@@ -151,6 +147,7 @@ function parseMatchText(text: string): {home: string | null; away: string | null
     time = `${timeMatch[1]}:${timeMatch[2]}`;
     cleaned = cleaned.replace(/\s*[à a]\s*\d{1,2}[h:]*\d{2}/i, '').trim();
   }
+  
   const separators = [/\s*vs\s*/i, /\s*-\s*/];
   let home: string | null = null;
   let away: string | null = null;
@@ -183,69 +180,54 @@ function parseMatchText(text: string): {home: string | null; away: string | null
 interface ColumnInfo {
   team: string;
   category: string;
-  location: string;
   coach: string;
 }
 
+// Fonction principale de parsing
 async function parseExcelFile(buffer: Buffer): Promise<any[]> {
   const workbook = XLSX.read(buffer, { cellStyles: true, type: 'array' });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const data: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
 
+  // Lire les métadonnées
   const lastUpdatedRaw = data[0]?.[0];
   const lastUpdated = lastUpdatedRaw ? String(lastUpdatedRaw).replace('MAJ le ', '').trim() : null;
   const season = data[0]?.[5]?.toString().trim() || '2025-2026';
 
-  // Déterminer la colonne de date
-  let dateCol = 5;
-  for (let c = 0; c < 10; c++) {
-    const header = String(data[8]?.[c] || '').toLowerCase();
-    if (header.includes('date')) {
-      dateCol = c;
-      break;
-    }
-  }
+  // Colonne de date est la colonne 4 (E)
+  const dateCol = 4;
   
-  // Lire les salles des colonnes (lignes 8-10)
-  const headerRows = {
-    hall: data[8] || [],
-    poly: data[9] || [],
-    rodemack: data[10] || []
-  };
-  
-  const columns: Map<number, ColumnInfo> = new Map();
+  // Lire les infos des colonnes (équipes en ligne 11, catégories en ligne 12, coachs en ligne 13)
   const teamsRow = data[11] || [];
   const categoryRow = data[12] || [];
   const coachRow = data[13] || [];
   
-  for (let col = dateCol + 1; col < Math.min(teamsRow.length, dateCol + 20); col++) {
+  // Créer une map: colonne -> {team, category, coach}
+  const columns: Map<number, ColumnInfo> = new Map();
+  for (let col = dateCol + 1; col < Math.min(50, teamsRow.length); col++) {
     const rawTeam = String(teamsRow[col] || '');
     const team = normalizeTeamName(rawTeam);
-    const category = getCategoryFromText(String(categoryRow[col] || ''));
-    const coach = cleanText(String(coachRow[col] || ''));
-    
-    let location = 'Extérieur';
-    const hallVal = headerRows.hall[col];
-    const polyVal = headerRows.poly[col];
-    const rodemackVal = headerRows.rodemack[col];
-    if (hallVal && String(hallVal).trim()) {
-      location = 'Hettange (Hall)';
-    } else if (polyVal && String(polyVal).trim()) {
-      location = 'Hettange (Poly)';
-    } else if (rodemackVal && String(rodemackVal).trim()) {
-      location = 'Rodemack';
-    }
-    
-    if (team && !team.startsWith('-')) {
-      columns.set(col, { team, category, location, coach });
+    if (team && !team.startsWith('-') && team.trim() !== '') {
+      columns.set(col, {
+        team: team,
+        category: getCategoryFromText(String(categoryRow[col] || '')),
+        coach: cleanText(String(coachRow[col] || ''))
+      });
     }
   }
 
   const matches: any[] = [];
+  const processedRows = new Set<number>();
 
+  // Parcourir toutes les lignes à partir de 14
   for (let rowIdx = 14; rowIdx < data.length; rowIdx++) {
+    // Si cette ligne a déjà été traitée, skip
+    if (processedRows.has(rowIdx)) continue;
+    
     const dateCell = data[rowIdx]?.[dateCol];
-    if (!dateCell || !String(dateCell).trim().includes('/')) continue;
+    if (!dateCell || !String(dateCell).trim().includes('/')) {
+      continue;
+    }
 
     const dateStr = String(dateCell).trim();
     const [datePart, dayPart] = dateStr.split('\n');
@@ -253,32 +235,50 @@ async function parseExcelFile(buffer: Buffer): Promise<any[]> {
     const dayName = dayPart?.trim() || null;
     if (!formattedDate) continue;
 
-    // Lire les camionnettes (colonnes 2 et 3)
+    // Détecter la taille du bloc (cellules fusionnées dans la colonne date)
+    let blockSize = 1;
+    for (let offset = 1; offset <= 2; offset++) {
+      const nextRow = rowIdx + offset;
+      if (nextRow >= data.length) break;
+      if (!data[nextRow]?.[dateCol] || String(data[nextRow]?.[dateCol]).trim() === '') {
+        blockSize = offset + 1;
+      } else {
+        break;
+      }
+    }
+    
+    // Marquer toutes les lignes du bloc comme traitées
+    for (let i = 0; i < blockSize; i++) {
+      processedRows.add(rowIdx + i);
+    }
+
+    // Lire les camionnettes pour ce bloc (colonnes 2 et 3)
     let dateCamionnette: string | null = null;
-    for (let r = rowIdx; r <= rowIdx + 2 && r < data.length; r++) {
+    for (let r = rowIdx; r < rowIdx + blockSize && r < data.length; r++) {
       const cC = cleanText(String(data[r]?.[2] || ''));
       const cD = cleanText(String(data[r]?.[3] || ''));
       if (cC && /camionnette/i.test(cC.toLowerCase())) {
         const team = normalizeTeamName(cC.replace(/camionnette/gi, '').trim());
         if (team && EHR_TEAMS.has(team)) {
           dateCamionnette = team;
-          break;
         }
       }
       if (cD && /camionnette/i.test(cD.toLowerCase())) {
         const team = normalizeTeamName(cD.replace(/camionnette/gi, '').trim());
         if (team && EHR_TEAMS.has(team)) {
           dateCamionnette = team;
-          break;
         }
       }
     }
 
+    // Parcourir chaque colonne d'équipe
     for (const [col, colInfo] of Array.from(columns.entries())) {
       let matchText = '';
       let locationColor = 'FFFFFF';
+      let foundMatch = false;
 
-      for (let offset = 0; offset < 3; offset++) {
+      // Lire toutes les lignes du bloc
+      for (let offset = 0; offset < blockSize; offset++) {
         const checkRow = rowIdx + offset;
         if (checkRow >= data.length) continue;
         const cellValue = data[checkRow]?.[col];
@@ -290,88 +290,99 @@ async function parseExcelFile(buffer: Buffer): Promise<any[]> {
           if (color !== 'FFFFFF' && color !== 'none') {
             locationColor = color;
           }
+          foundMatch = true;
         }
       }
 
-      if (!matchText) continue;
+      if (!foundMatch) continue;
 
-      let finalLocation = COLOR_TO_LOCATION[locationColor] || colInfo.location;
-      if (finalLocation === 'Extérieur' && colInfo.location !== 'Extérieur') {
-        finalLocation = colInfo.location;
-      }
-
+      // Déterminer la salle à partir de la couleur
+      let finalLocation = COLOR_TO_LOCATION[locationColor] || 'Extérieur';
+      
       const parsed = parseMatchText(matchText);
-      let homeTeam = parsed.home;
-      let awayTeam = parsed.away;
+      let home = parsed.home;
+      let away = parsed.away;
       const time = parsed.time || extractTime(matchText);
 
-      if (!homeTeam && !awayTeam) {
-        homeTeam = colInfo.team;
+      // Si home ou away est un numéro, cela fait référence à l'équipe de la colonne
+      if (home && /^\d+$/.test(home)) {
+        const colIndex = Array.from(columns.keys()).indexOf(col);
+        const targetColIndex = colIndex + (parseInt(home) - 1);
+        const targetCol = Array.from(columns.keys())[targetColIndex];
+        const targetColInfo = columns.get(targetCol);
+        if (targetColInfo) {
+          home = targetColInfo.team;
+        } else {
+          home = colInfo.team;
+        }
+      }
+      if (away && /^\d+$/.test(away)) {
+        const colIndex = Array.from(columns.keys()).indexOf(col);
+        const targetColIndex = colIndex + (parseInt(away) - 1);
+        const targetCol = Array.from(columns.keys())[targetColIndex];
+        const targetColInfo = columns.get(targetCol);
+        if (targetColInfo) {
+          away = targetColInfo.team;
+        } else {
+          away = colInfo.team;
+        }
       }
       
-      if (!homeTeam) continue;
+      // Si pas de home/away, utiliser l'équipe de la colonne
+      if (!home && !away) {
+        home = colInfo.team;
+      }
+      if (!home) continue;
       
+      // Déterminer isHome/isAway
       let isHome = false;
       let isAway = false;
       
-      if (homeTeam && awayTeam) {
-        const homeIsEHR = isEHRTeam(homeTeam);
-        const awayIsEHR = isEHRTeam(awayTeam);
-        
+      if (home && away) {
+        const homeIsEHR = isEHRTeam(home);
+        const awayIsEHR = isEHRTeam(away);
         if (homeIsEHR && !awayIsEHR) {
-          isHome = true;
-          isAway = false;
-          if (finalLocation === 'Extérieur') {
-            finalLocation = colInfo.location !== 'Extérieur' ? colInfo.location : 'Extérieur';
-          }
+          isHome = true; isAway = false;
+          if (finalLocation === 'Extérieur') finalLocation = 'Rodemack';
         } else if (!homeIsEHR && awayIsEHR) {
-          isHome = false;
-          isAway = true;
-          finalLocation = 'Extérieur';
+          isHome = false; isAway = true; finalLocation = 'Extérieur';
         } else if (homeIsEHR && awayIsEHR) {
-          isHome = true;
-          isAway = false;
-          finalLocation = colInfo.location !== 'Extérieur' ? colInfo.location : 'Rodemack';
+          isHome = true; isAway = false; finalLocation = finalLocation !== 'Extérieur' ? finalLocation : 'Rodemack';
         } else {
-          isHome = finalLocation !== 'Extérieur';
-          isAway = finalLocation === 'Extérieur';
+          isHome = finalLocation !== 'Extérieur'; isAway = finalLocation === 'Extérieur';
         }
       } else {
-        if (isEHRTeam(homeTeam)) {
-          isHome = finalLocation !== 'Extérieur';
-          isAway = finalLocation === 'Extérieur';
+        if (isEHRTeam(home)) {
+          isHome = finalLocation !== 'Extérieur'; isAway = finalLocation === 'Extérieur';
         } else {
           continue;
         }
       }
 
-      if (homeTeam && isEHRTeam(homeTeam)) {
-        homeTeam = normalizeTeamName(homeTeam);
-      }
-      if (awayTeam && isEHRTeam(awayTeam)) {
-        awayTeam = normalizeTeamName(awayTeam);
-      }
+      if (home && isEHRTeam(home)) home = normalizeTeamName(home);
+      if (away && isEHRTeam(away)) away = normalizeTeamName(away);
 
       matches.push({
         date: formattedDate,
         day: dayName,
-        home_team: homeTeam,
-        away_team: awayTeam,
+        home_team: home,
+        away_team: away,
         time: time,
         location: finalLocation,
         match_type: 'Championnat',
-        category: colInfo.category || colInfo.team,
+        category: colInfo.category,
         coach: colInfo.coach,
         is_home: isHome,
         is_away: isAway,
-        is_internal: isHome && awayTeam && isEHRTeam(homeTeam) && isEHRTeam(awayTeam),
+        is_internal: isHome && away && isEHRTeam(home) && isEHRTeam(away),
         season: season,
         last_updated: lastUpdated,
-        camionnette: (isHome && !isAway && dateCamionnette && dateCamionnette === homeTeam) ? dateCamionnette : null
+        camionnette: (isHome && !isAway && dateCamionnette && dateCamionnette === home) ? dateCamionnette : null
       });
     }
   }
 
+  // Supprimer les doublons
   const seen = new Set();
   const uniqueMatches = matches.filter(m => {
     const key = `${m.date}-${m.home_team}-${m.away_team}-${m.time}`;
@@ -386,6 +397,7 @@ async function parseExcelFile(buffer: Buffer): Promise<any[]> {
 export async function POST(request: Request) {
   try {
     await initializeMatchesTable();
+    
     const formData = await request.formData();
     const file = formData.get("file") as File;
     if (!file) return NextResponse.json({ error: "Aucun fichier fourni." }, { status: 400 });
