@@ -92,31 +92,58 @@ export async function saveAllMatches(matches: any[]) {
     
     if (matches.length === 0) return;
 
-    // Requête avec uniquement les colonnes existantes dans la DB
+    // Vérifier quelles colonnes existent dans la table
+    const columnsResult = await client.execute({
+      sql: `PRAGMA table_info(${MATCHES_TABLE})`,
+      args: [],
+    });
+    const existingColumns = new Set(columnsResult.rows.map((r: any) => r.name));
+    
+    // Construire la requête INSERT dynamiquement avec seulement les colonnes existantes
+    const baseColumns = ['date', 'day', 'home_team', 'away_team', 'time', 'location', 'match_type', 'category', 'season', 'last_updated'];
+    const optionalColumns = [
+      { name: 'coach', default: null },
+      { name: 'camionnette', default: null }
+    ];
+    
+    const columnsToInsert = baseColumns.filter(col => existingColumns.has(col));
+    const placeholders = columnsToInsert.map(() => '?').join(', ');
+    
+    // Ajouter les colonnes optionnelles si elles existent
+    for (const col of optionalColumns) {
+      if (existingColumns.has(col.name)) {
+        columnsToInsert.push(col.name);
+      }
+    }
+    
     const insertSql = `
       INSERT INTO ${MATCHES_TABLE} (
-        date, day, home_team, away_team, time, location,
-        match_type, category, coach, camionnette, season, last_updated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ${columnsToInsert.join(', ')}
+      ) VALUES (${columnsToInsert.map(() => '?').join(', ')})
     `;
 
     for (const match of matches) {
+      const args: any[] = [];
+      for (const col of columnsToInsert) {
+        switch (col) {
+          case 'date': args.push(match.date || null); break;
+          case 'day': args.push(match.day || null); break;
+          case 'home_team': args.push(match.home_team || null); break;
+          case 'away_team': args.push(match.away_team || null); break;
+          case 'time': args.push(match.time || null); break;
+          case 'location': args.push(match.location || null); break;
+          case 'match_type': args.push(match.match_type || 'Championnat'); break;
+          case 'category': args.push(match.category || null); break;
+          case 'season': args.push(match.season || '2026-2027'); break;
+          case 'last_updated': args.push(match.last_updated || null); break;
+          case 'coach': args.push(match.coach || null); break;
+          case 'camionnette': args.push(match.camionnette || null); break;
+        }
+      }
+      
       await client.execute({
         sql: insertSql,
-        args: [
-          match.date || null,
-          match.day || null,
-          match.home_team || null,
-          match.away_team || null,
-          match.time || null,
-          match.location || null,
-          match.match_type || 'Championnat',
-          match.category || null,
-          match.coach || null,
-          match.camionnette || null,
-          match.season || '2026-2027',
-          match.last_updated || null
-        ],
+        args: args,
       });
     }
     console.log(`Sauvegarde de ${matches.length} matchs terminée`);
