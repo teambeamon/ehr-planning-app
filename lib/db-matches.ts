@@ -155,7 +155,7 @@ export async function saveAllMatches(matches: any[]) {
 
 // Helper pour convertir les rows en Match
 function rowToMatch(row: any): Match {
-  const EHR_TEAMS = new Set(['Seniors M', 'Seniors F1', 'Seniors F2', 'M17', 'F17', 'M15', 'F15', 'M13', 'F13', 'M11', 'F11']);
+  const EHR_TEAMS = new Set(['Seniors M', 'Seniors F1', 'Seniors F2', 'M18', 'F18', 'M17', 'F17', 'M15', 'F15', 'M13', 'F13', 'M11', 'F11']);
   const EHR_LOCATIONS = ['Rodemack', 'Hettange (Hall)', 'Hettange (Poly)', 'Kanfen'];
   
   const isEHRTeam = (name: string | null): boolean => {
@@ -300,7 +300,7 @@ export async function getWeekendMatchesFromDB(): Promise<Match[]> {
 }
 
 // Équipes EHR
-const EHR_TEAMS = ['Seniors M', 'Seniors F1', 'Seniors F2', 'M17', 'F17', 'M15', 'F15', 'M13', 'F13', 'M11', 'F11'];
+const EHR_TEAMS = new Set(['Seniors M', 'Seniors F1', 'Seniors F2', 'M18', 'F18', 'M17', 'F17', 'M15', 'F15', 'M13', 'F13', 'M11', 'F11']);
 const EHR_LOCATIONS = ['Rodemack', 'Hettange (Hall)', 'Hettange (Poly)', 'Kanfen', 'Extérieur'];
 
 // Récupérer les équipes
@@ -308,7 +308,7 @@ export async function getTeamsFromDB(): Promise<string[]> {
   if (!isTursoConfigured() || !client) {
     const allTeams = new Set<string>();
     inMemoryMatches.forEach(m => { if (m.home_team) allTeams.add(m.home_team); if (m.away_team) allTeams.add(m.away_team); });
-    return EHR_TEAMS.filter(t => allTeams.has(t));
+    return Array.from(EHR_TEAMS).filter(t => allTeams.has(t));
   }
   try {
     const result = await executeWithFallback(
@@ -316,7 +316,7 @@ export async function getTeamsFromDB(): Promise<string[]> {
       []
     );
     const allTeams = result.rows.map((r: any) => r.home_team || r.away_team || '');
-    return EHR_TEAMS.filter(t => allTeams.includes(t));
+    return Array.from(EHR_TEAMS).filter(t => allTeams.includes(t));
   } catch (error) {
     return [];
   }
@@ -403,9 +403,16 @@ export async function getStatsFromDB() {
     const internal = inMemoryMatches.filter(m => m.is_internal).length;
     const withCamionnette = inMemoryMatches.filter(m => m.camionnette).length;
     const byTeam: Record<string, number> = {};
-    inMemoryMatches.filter(m => m.is_home && m.home_team && ehrTeams.has(m.home_team)).forEach(m => {
-      const dn = TEAM_DISPLAY[m.home_team!] || m.home_team!;
-      byTeam[dn] = (byTeam[dn] || 0) + 1;
+    // Compter TOUTES les apparitions des équipes EHR
+    inMemoryMatches.forEach(m => {
+      if (m.home_team && ehrTeams.has(m.home_team)) {
+        const dn = TEAM_DISPLAY[m.home_team] || m.home_team;
+        byTeam[dn] = (byTeam[dn] || 0) + 1;
+      }
+      if (m.away_team && ehrTeams.has(m.away_team)) {
+        const dn = TEAM_DISPLAY[m.away_team] || m.away_team;
+        byTeam[dn] = (byTeam[dn] || 0) + 1;
+      }
     });
     const byLocation: Record<string, number> = {};
     inMemoryMatches.filter(m => m.is_home && m.location && ehrLocs.includes(m.location)).forEach(m => {
@@ -434,9 +441,16 @@ export async function getStatsFromDB() {
     const allMatches = await getAllMatchesFromDB();
     const internal = allMatches.filter(m => m.is_internal).length;
     const byTeam: Record<string, number> = {};
-    allMatches.filter(m => m.is_home && m.home_team && ehrTeams.has(m.home_team)).forEach(m => {
-      const dn = TEAM_DISPLAY[m.home_team!] || m.home_team!;
-      byTeam[dn] = (byTeam[dn] || 0) + 1;
+    // Compter TOUTES les apparitions des équipes EHR (à domicile ET à l'extérieur)
+    allMatches.forEach(m => {
+      if (m.home_team && ehrTeams.has(m.home_team)) {
+        const dn = TEAM_DISPLAY[m.home_team] || m.home_team;
+        byTeam[dn] = (byTeam[dn] || 0) + 1;
+      }
+      if (m.away_team && ehrTeams.has(m.away_team)) {
+        const dn = TEAM_DISPLAY[m.away_team] || m.away_team;
+        byTeam[dn] = (byTeam[dn] || 0) + 1;
+      }
     });
     const byLocation: Record<string, number> = {};
     allMatches.filter(m => m.is_home && m.location && ehrLocs.includes(m.location)).forEach(m => {
