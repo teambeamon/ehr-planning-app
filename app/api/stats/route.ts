@@ -2,6 +2,9 @@
 import { NextResponse } from "next/server";
 import { Match, getStats } from "@/lib/utils";
 
+// Toujours frais : évite un pré-rendu figé au build
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const stats = await getStats();
