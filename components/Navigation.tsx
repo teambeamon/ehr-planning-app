@@ -22,6 +22,7 @@ export default function Navigation() {
     { href: "/matches", label: "Tous les matchs" },
     { href: "/stats", label: "Statistiques" },
     { href: "/buvettes", label: "Gestion buvettes" },
+    { href: "/changes", label: "Changements" },
     { href: "/upload", label: "Uploader" },
   ];
 
