@@ -141,7 +141,7 @@ function isNonMatchCell(str: string): boolean {
   return false;
 }
 
-function parseMatchText(text: string): {home: string | null; away: string | null; time: string | null} {
+function parseMatchText(text: string, columnTeam: string): {home: string | null; away: string | null; time: string | null} {
   let cleaned = cleanText(text);
   const timeMatch = cleaned.match(/(\d{1,2})[h:](\d{2})/i);
   let time: string | null = null;
@@ -149,32 +149,39 @@ function parseMatchText(text: string): {home: string | null; away: string | null
     time = `${timeMatch[1]}:${timeMatch[2]}`;
     cleaned = cleaned.replace(/\s*[à a]\s*\d{1,2}[h:]*\d{2}/i, '').trim();
   }
-  
+
+  // "EHR" ou "EHR N" désigne l'équipe de la colonne courante (ex: "Marly - EHR 2")
+  const teamFromPart = (part: string): string => {
+    const p = part.trim().replace(/\s*à\s*$/i, '').trim();
+    if (/^EHR\s*\d*$/i.test(p)) return columnTeam;
+    return normalizeTeamName(p);
+  };
+
   const separators = [/\s*vs\s*/i, /\s*-\s*/];
   let home: string | null = null;
   let away: string | null = null;
   for (const sep of separators) {
     const parts = cleaned.split(sep);
     if (parts.length === 2) {
-      home = normalizeTeamName(parts[0].trim());
-      away = normalizeTeamName(parts[1].trim());
+      home = teamFromPart(parts[0]);
+      away = teamFromPart(parts[1]);
       break;
     } else if (parts.length > 2) {
       const ehrIndex = parts.findIndex(p => /EHR/i.test(p) || isEHRTeam(p));
       if (ehrIndex >= 0) {
         if (ehrIndex === 0) {
-          home = normalizeTeamName(parts[0].trim());
-          away = normalizeTeamName(parts.slice(1).join(' ').trim());
+          home = teamFromPart(parts[0]);
+          away = teamFromPart(parts.slice(1).join(' '));
         } else {
-          home = normalizeTeamName(parts.slice(0, ehrIndex).join(' ').trim());
-          away = normalizeTeamName(parts.slice(ehrIndex).join(' ').trim());
+          home = teamFromPart(parts.slice(0, ehrIndex).join(' '));
+          away = teamFromPart(parts.slice(ehrIndex).join(' '));
         }
         break;
       }
     }
   }
   if (!home && !away) {
-    home = normalizeTeamName(cleaned);
+    home = teamFromPart(cleaned);
   }
   return { home, away, time };
 }
@@ -301,7 +308,7 @@ async function parseExcelFile(buffer: Buffer): Promise<any[]> {
       // Déterminer la salle à partir de la couleur
       let finalLocation = COLOR_TO_LOCATION[locationColor] || 'Extérieur';
       
-      const parsed = parseMatchText(matchText);
+      const parsed = parseMatchText(matchText, colInfo.team);
       let home = parsed.home;
       let away = parsed.away;
       const time = parsed.time || extractTime(matchText);
