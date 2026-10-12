@@ -1,5 +1,5 @@
 // lib/db-matches.ts
-import client, { isTursoConfigured } from "./db";
+import client, { isTursoConfigured, executeQuery } from "./db";
 
 // Type pour les matchs
 import type { Match } from "./utils";
@@ -19,8 +19,7 @@ export async function initializeMatchesTable() {
 
   try {
     // Créer la table si elle n'existe pas
-    await client.execute({
-      sql: `
+    await executeQuery(`
         CREATE TABLE IF NOT EXISTS ${MATCHES_TABLE} (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           date TEXT NOT NULL,
@@ -43,19 +42,11 @@ export async function initializeMatchesTable() {
           original_column INTEGER,
           created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
-      `,
-      args: [],
-    });
+      `, []);
 
-    await client.execute({
-      sql: `CREATE INDEX IF NOT EXISTS idx_matches_date ON ${MATCHES_TABLE}(date)`,
-      args: [],
-    });
+    await executeQuery(`CREATE INDEX IF NOT EXISTS idx_matches_date ON ${MATCHES_TABLE}(date)`, []);
 
-    await client.execute({
-      sql: `CREATE INDEX IF NOT EXISTS idx_matches_home_team ON ${MATCHES_TABLE}(home_team)`,
-      args: [],
-    });
+    await executeQuery(`CREATE INDEX IF NOT EXISTS idx_matches_home_team ON ${MATCHES_TABLE}(home_team)`, []);
 
     console.log("Table matches initialisée avec succès");
   } catch (error) {
@@ -79,57 +70,60 @@ export async function saveAllMatches(matches: any[]) {
   }
 
   try {
-    await client.execute({ sql: `DELETE FROM ${MATCHES_TABLE}`, args: [] });
-    
+    await executeQuery(`DELETE FROM ${MATCHES_TABLE}`, []);
+
     if (matches.length === 0) return;
 
     // Vérifier quelles colonnes existent dans la table
-    const columnsResult = await client.execute({
-      sql: `PRAGMA table_info(${MATCHES_TABLE})`,
-      args: [],
-    });
+    const columnsResult = await executeQuery(`PRAGMA table_info(${MATCHES_TABLE})`, []);
     const existingColumns = new Set(columnsResult.rows.map((r: any) => r.name));
-    
-    // Construire la requête INSERT dynamiquement avec seulement les colonnes existantes
+
+    // Construire les INSERT multi-lignes par lots avec seulement les colonnes existantes
     const allColumns = ['date', 'day', 'home_team', 'away_team', 'match_display', 'time', 'location', 'match_type', 'category', 'season', 'last_updated', 'coach', 'camionnette', 'is_home', 'is_away', 'is_internal', 'original_team', 'original_column'];
     const columnsToInsert = allColumns.filter(col => existingColumns.has(col));
-    const placeholders = columnsToInsert.map(() => '?').join(', ');
-    
-    const insertSql = `
-      INSERT INTO ${MATCHES_TABLE} (
-        ${columnsToInsert.join(', ')}
-      ) VALUES (${columnsToInsert.map(() => '?').join(', ')})
-    `;
+    if (columnsToInsert.length === 0) return;
 
-    for (const match of matches) {
+    const valueFor = (match: any, col: string): any => {
+      switch (col) {
+        case 'date': return match.date || null;
+        case 'day': return match.day || null;
+        case 'home_team': return match.home_team || null;
+        case 'away_team': return match.away_team || null;
+        case 'match_display': return match.match_display || null;
+        case 'time': return match.time || null;
+        case 'location': return match.location || null;
+        case 'match_type': return match.match_type || 'Championnat';
+        case 'category': return match.category || null;
+        case 'season': return match.season || '2026-2027';
+        case 'last_updated': return match.last_updated || null;
+        case 'coach': return match.coach || null;
+        case 'camionnette': return match.camionnette || null;
+        case 'is_home': return match.is_home ? 1 : 0;
+        case 'is_away': return match.is_away ? 1 : 0;
+        case 'is_internal': return match.is_internal ? 1 : 0;
+        case 'original_team': return match.original_team || null;
+        case 'original_column': return match.original_column || null;
+      }
+      return null;
+    };
+
+    // Limite prudente sous le maximum de variables bindées par requête SQLite
+    const rowsPerChunk = Math.max(1, Math.floor(900 / columnsToInsert.length));
+
+    for (let i = 0; i < matches.length; i += rowsPerChunk) {
+      const chunk = matches.slice(i, i + rowsPerChunk);
+      const tuples = chunk.map(() => `(${columnsToInsert.map(() => '?').join(', ')})`).join(', ');
       const args: any[] = [];
-      for (const col of columnsToInsert) {
-        switch (col) {
-          case 'date': args.push(match.date || null); break;
-          case 'day': args.push(match.day || null); break;
-          case 'home_team': args.push(match.home_team || null); break;
-          case 'away_team': args.push(match.away_team || null); break;
-          case 'match_display': args.push(match.match_display || null); break;
-          case 'time': args.push(match.time || null); break;
-          case 'location': args.push(match.location || null); break;
-          case 'match_type': args.push(match.match_type || 'Championnat'); break;
-          case 'category': args.push(match.category || null); break;
-          case 'season': args.push(match.season || '2026-2027'); break;
-          case 'last_updated': args.push(match.last_updated || null); break;
-          case 'coach': args.push(match.coach || null); break;
-          case 'camionnette': args.push(match.camionnette || null); break;
-          case 'is_home': args.push(match.is_home ? 1 : 0); break;
-          case 'is_away': args.push(match.is_away ? 1 : 0); break;
-          case 'is_internal': args.push(match.is_internal ? 1 : 0); break;
-          case 'original_team': args.push(match.original_team || null); break;
-          case 'original_column': args.push(match.original_column || null); break;
+      for (const match of chunk) {
+        for (const col of columnsToInsert) {
+          args.push(valueFor(match, col));
         }
       }
-      
-      await client.execute({
-        sql: insertSql,
-        args: args,
-      });
+
+      await executeQuery(
+        `INSERT INTO ${MATCHES_TABLE} (${columnsToInsert.join(', ')}) VALUES ${tuples}`,
+        args
+      );
     }
     console.log(`Sauvegarde de ${matches.length} matchs terminée`);
   } catch (error) {
@@ -180,12 +174,12 @@ function rowToMatch(row: any): Match {
   };
 }
 
-// Exécuter une requête avec fallback
+// Exécuter une requête avec timeout
 async function executeWithFallback(sql: string, args: any[] = []): Promise<any> {
   if (!isTursoConfigured() || !client) {
     throw new Error("Turso non configuré");
   }
-  return await client.execute({ sql, args });
+  return await executeQuery(sql, args);
 }
 
 // Récupérer tous les matchs

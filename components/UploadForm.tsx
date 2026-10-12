@@ -45,8 +45,14 @@ export default function UploadForm() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Erreur lors de l'upload du fichier.");
+        let message = `Erreur ${response.status} lors de l'upload du fichier.`;
+        try {
+          const errorData = await response.json();
+          if (errorData?.error) message = errorData.error;
+        } catch {
+          // Réponse non-JSON (ex. timeout de la fonction serveur)
+        }
+        throw new Error(message);
       }
 
       const result = await response.json();

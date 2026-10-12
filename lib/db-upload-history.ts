@@ -1,5 +1,5 @@
 // lib/db-upload-history.ts
-import client, { isTursoConfigured } from "./db";
+import client, { isTursoConfigured, executeQuery } from "./db";
 
 // Nom de la table pour l'historique des uploads
 export const UPLOAD_HISTORY_TABLE = "upload_history";
@@ -11,8 +11,7 @@ export async function initializeUploadHistoryTable() {
   }
 
   try {
-    await client.execute({
-      sql: `
+    await executeQuery(`
         CREATE TABLE IF NOT EXISTS ${UPLOAD_HISTORY_TABLE} (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           filename TEXT NOT NULL,
@@ -23,19 +22,11 @@ export async function initializeUploadHistoryTable() {
           file_hash TEXT UNIQUE,
           data_snapshot TEXT
         )
-      `,
-      args: [],
-    });
+      `, []);
 
-    await client.execute({
-      sql: `CREATE INDEX IF NOT EXISTS idx_upload_history_date ON ${UPLOAD_HISTORY_TABLE}(uploaded_at)`,
-      args: [],
-    });
+    await executeQuery(`CREATE INDEX IF NOT EXISTS idx_upload_history_date ON ${UPLOAD_HISTORY_TABLE}(uploaded_at)`, []);
 
-    await client.execute({
-      sql: `CREATE INDEX IF NOT EXISTS idx_upload_history_hash ON ${UPLOAD_HISTORY_TABLE}(file_hash)`,
-      args: [],
-    });
+    await executeQuery(`CREATE INDEX IF NOT EXISTS idx_upload_history_hash ON ${UPLOAD_HISTORY_TABLE}(file_hash)`, []);
 
   } catch (error) {
     console.error("Erreur initialisation upload_history:", error);
@@ -49,10 +40,10 @@ export async function saveUploadToHistory(filename: string, season: string, last
   }
 
   try {
-    await client.execute({
-      sql: `INSERT INTO ${UPLOAD_HISTORY_TABLE} (filename, season, last_updated, match_count, file_hash, data_snapshot) VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [filename, season, lastUpdated, matchCount, fileHash, snapshot],
-    });
+    await executeQuery(
+      `INSERT INTO ${UPLOAD_HISTORY_TABLE} (filename, season, last_updated, match_count, file_hash, data_snapshot) VALUES (?, ?, ?, ?, ?, ?)`,
+      [filename, season, lastUpdated, matchCount, fileHash, snapshot],
+    );
   } catch (error) {
     console.error("Erreur sauvegarde historique:", error);
   }
@@ -65,10 +56,7 @@ export async function getUploadHistory(): Promise<any[]> {
   }
 
   try {
-    const result = await client.execute({
-      sql: `SELECT * FROM ${UPLOAD_HISTORY_TABLE} ORDER BY uploaded_at DESC`,
-      args: [],
-    });
+    const result = await executeQuery(`SELECT * FROM ${UPLOAD_HISTORY_TABLE} ORDER BY uploaded_at DESC`, []);
     return result.rows;
   } catch (error) {
     return [];
@@ -82,10 +70,7 @@ export async function getLastUpload(): Promise<any> {
   }
 
   try {
-    const result = await client.execute({
-      sql: `SELECT * FROM ${UPLOAD_HISTORY_TABLE} ORDER BY uploaded_at DESC LIMIT 1`,
-      args: [],
-    });
+    const result = await executeQuery(`SELECT * FROM ${UPLOAD_HISTORY_TABLE} ORDER BY uploaded_at DESC LIMIT 1`, []);
     return result.rows.length > 0 ? result.rows[0] : null;
   } catch (error) {
     return null;
@@ -99,10 +84,7 @@ export async function getUploadSnapshot(fileHash: string): Promise<string | null
   }
 
   try {
-    const result = await client.execute({
-      sql: `SELECT data_snapshot FROM ${UPLOAD_HISTORY_TABLE} WHERE file_hash = ?`,
-      args: [fileHash],
-    });
+    const result = await executeQuery(`SELECT data_snapshot FROM ${UPLOAD_HISTORY_TABLE} WHERE file_hash = ?`, [fileHash]);
     return result.rows.length > 0 ? (result.rows[0].data_snapshot as string || null) : null;
   } catch (error) {
     return null;

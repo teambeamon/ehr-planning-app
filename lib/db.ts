@@ -1,6 +1,9 @@
 // lib/db.ts
 import { createClient } from '@libsql/client';
 
+// Timeout pour chaque requête SQL (évite les requêtes qui pendent indéfiniment)
+const DB_TIMEOUT_MS = 15000;
+
 // Client Turso - seulement si configuré
 let client: ReturnType<typeof createClient> | null = null;
 
@@ -24,15 +27,23 @@ export async function executeQuery(query: string, params: any[] = []) {
     console.error('Client Turso non disponible');
     throw new Error('Base de données non configurée');
   }
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const result = await client.execute({
-      sql: query,
-      args: params,
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(`Requête SQL interrompue après ${DB_TIMEOUT_MS} ms : ${query.substring(0, 120)}`));
+      }, DB_TIMEOUT_MS);
     });
+    const result = await Promise.race([
+      client.execute({ sql: query, args: params }),
+      timeout,
+    ]);
     return result;
   } catch (error) {
     console.error('Erreur lors de l\'exécution de la requête :', error);
     throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
