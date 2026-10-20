@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Match } from "@/lib/utils";
-import { Calendar, Clock, Home, Plane, Beer, CheckCircle, AlertTriangle } from "lucide-react";
+import { Calendar, Clock, Home, Plane, Beer, CheckCircle, AlertTriangle, ClipboardCheck, Circle } from "lucide-react";
 
 // Couleurs des salles EHR
 const LOCATION_COLORS: Record<string, string> = {
@@ -122,6 +122,7 @@ export default function BuvettesPage() {
   const [allWeekends, setAllWeekends] = useState<{saturday: string; sunday: string; label: string}[]>([]);
   const [viewMode, setViewMode] = useState<'weekend' | 'all'>('all');
   const [selectedLocation, setSelectedLocation] = useState<string>('toutes');
+  const [authorizations, setAuthorizations] = useState<{date: string; location: string}[]>([]);
   
   const ehrLocations = ['Rodemack', 'Hettange (Hall)', 'Hettange (Poly)', 'Kanfen'];
   
@@ -144,6 +145,72 @@ export default function BuvettesPage() {
     if (selectedLocation === 'toutes') return ehrMatches;
     return ehrMatches.filter(m => m.location === selectedLocation);
   }, [selectedLocation, ehrMatches]);
+
+  // Chargement des demandes d'autorisation déjà enregistrées
+  useEffect(() => {
+    const fetchAuthorizations = async () => {
+      try {
+        const response = await fetch("/api/buvettes/authorizations");
+        const data = await response.json();
+        if (data.success && Array.isArray(data.authorizations)) {
+          setAuthorizations(data.authorizations);
+        }
+      } catch (error) {
+        console.error("Erreur lors de la récupération des autorisations :", error);
+      }
+    };
+    fetchAuthorizations();
+  }, []);
+
+  const isAuthDone = (date: string, location: string) =>
+    authorizations.some(a => a.date === date && a.location === location);
+
+  // Cocher / décocher une demande (mise à jour optimiste)
+  const toggleAuthorization = async (date: string, location: string) => {
+    const previous = authorizations;
+    const done = isAuthDone(date, location);
+    setAuthorizations(
+      done
+        ? authorizations.filter(a => !(a.date === date && a.location === location))
+        : [...authorizations, { date, location }]
+    );
+    try {
+      const response = await fetch("/api/buvettes/authorizations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, location, done: !done }),
+      });
+      if (!response.ok) throw new Error("Enregistrement impossible");
+    } catch (error) {
+      console.error("Erreur:", error);
+      setAuthorizations(previous);
+    }
+  };
+
+  // Vue simplifiée : dates à venir par salle, indépendamment des week-ends
+  const upcomingDatesByLocation = useMemo(() => {
+    const map = new Map<string, { date: string; location: string; matches: Match[] }>();
+    ehrMatches.forEach((m) => {
+      if (!m.date || !m.location || !ehrLocations.includes(m.location)) return;
+      if (m.date < todayStr) return;
+      if (selectedLocation !== 'toutes' && m.location !== selectedLocation) return;
+      const key = `${m.date}|${m.location}`;
+      const entry = map.get(key) || { date: m.date, location: m.location, matches: [] };
+      entry.matches.push(m);
+      map.set(key, entry);
+    });
+    return Array.from(map.values())
+      .sort((a, b) => a.date.localeCompare(b.date) || a.location.localeCompare(b.location))
+      .map(e => ({
+        ...e,
+        matches: [...e.matches].sort((a, b) => (a.time || '23:59').localeCompare(b.time || '23:59')),
+      }));
+  }, [ehrMatches, todayStr, selectedLocation, ehrLocations]);
+
+  // Résumé de la vue simplifiée (une bonne date = au moins 2 matchs)
+  const upcomingGoodDates = upcomingDatesByLocation.filter(e => e.matches.length >= 2);
+  const goodDatesRequested = upcomingGoodDates.filter(e => isAuthDone(e.date, e.location)).length;
+  const goodDatesPending = upcomingGoodDates.length - goodDatesRequested;
 
   useEffect(() => {
     const fetchMatches = async () => {
@@ -263,6 +330,108 @@ export default function BuvettesPage() {
         <p className="text-gray-600">
           Anticipez les besoins en buvette pour le week-end - Détection automatique des créneaux avec matchs consécutifs
         </p>
+      </div>
+
+      {/* Vue simplifiée : demandes d'autorisation */}
+      <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+          <h2 className="text-xl font-bold text-blue-800 flex items-center gap-2">
+            <ClipboardCheck className="w-6 h-6" />
+            Demandes d'autorisation — vue simplifiée
+          </h2>
+          <span className="text-sm text-gray-500">Une bonne date = au moins 2 matchs dans la salle</span>
+        </div>
+
+        {/* Filtres salle rapides (partagés avec la vue détaillée) */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          {['toutes', ...ehrLocations].map((loc) => (
+            <button
+              key={loc}
+              onClick={() => setSelectedLocation(loc)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                selectedLocation === loc
+                  ? 'bg-blue-600 text-white shadow'
+                  : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+              }`}
+            >
+              {loc === 'toutes' ? 'Toutes les salles' : loc}
+            </button>
+          ))}
+        </div>
+
+        {/* Résumé */}
+        <p className="text-sm text-gray-600 mb-4">
+          <strong>{upcomingGoodDates.length}</strong> bonne{upcomingGoodDates.length > 1 ? 's' : ''} date{upcomingGoodDates.length > 1 ? 's' : ''} à venir
+          {' · '}
+          <strong className="text-green-700">{goodDatesRequested}</strong> demande{goodDatesRequested > 1 ? 's' : ''} déjà envoyée{goodDatesRequested > 1 ? 's' : ''}
+          {' · '}
+          <strong className="text-yellow-700">{goodDatesPending}</strong> restant à demander
+        </p>
+
+        {/* Liste des dates à venir */}
+        <div className="space-y-2 max-h-[28rem] overflow-y-auto pr-1">
+          {upcomingDatesByLocation.map(({ date, location, matches }) => {
+            const isGood = matches.length >= 2;
+            const isDone = isAuthDone(date, location);
+            const times = matches.map(m => formatTime(m.time)).filter(Boolean).join(' · ');
+            return (
+              <div
+                key={`${date}|${location}`}
+                className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                  isDone
+                    ? 'border-green-300 bg-green-50'
+                    : isGood
+                      ? 'border-blue-200 bg-blue-50/60'
+                      : 'border-gray-200 bg-gray-50'
+                }`}
+              >
+                <button
+                  onClick={() => toggleAuthorization(date, location)}
+                  className="flex-shrink-0 focus:outline-none"
+                  aria-label={isDone ? `Retirer la demande pour le ${formatDisplayDate(date)} à ${location}` : `Marquer la demande comme envoyée pour le ${formatDisplayDate(date)} à ${location}`}
+                >
+                  {isDone ? (
+                    <CheckCircle className="w-6 h-6 text-green-600" />
+                  ) : (
+                    <Circle className="w-6 h-6 text-gray-300 hover:text-blue-500 transition-colors" />
+                  )}
+                </button>
+                <div className="flex-1 min-w-0 flex items-center flex-wrap gap-2">
+                  <span className={`font-semibold ${isDone ? 'text-green-800 line-through' : 'text-blue-800'}`}>
+                    {formatDisplayDate(date)}
+                  </span>
+                  <span className="text-gray-500 text-sm">{getDayName(date)}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${LOCATION_BADGE_COLORS[location] || 'bg-gray-500 text-white'}`}>
+                    {location}
+                  </span>
+                  <span className="text-sm text-gray-600">
+                    {matches.length} match{matches.length > 1 ? 's' : ''}{times ? ` (${times})` : ''}
+                  </span>
+                </div>
+                {isGood ? (
+                  !isDone && (
+                    <span className="flex-shrink-0 bg-yellow-400 text-blue-800 px-2 py-1 rounded-full text-xs font-bold">
+                      Bonne date
+                    </span>
+                  )
+                ) : (
+                  <span className="flex-shrink-0 text-xs text-gray-400">1 seul match</span>
+                )}
+                {isDone && (
+                  <span className="flex-shrink-0 bg-green-500 text-white px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" />
+                    Demande envoyée
+                  </span>
+                )}
+              </div>
+            );
+          })}
+          {upcomingDatesByLocation.length === 0 && (
+            <p className="text-gray-500 text-sm py-4 text-center">
+              Aucune date à venir pour cette salle.
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Filtres */}
@@ -509,6 +678,8 @@ export default function BuvettesPage() {
       <div className="bg-blue-50 rounded-xl p-6 mt-12">
         <h3 className="font-semibold text-blue-800 mb-3 flex items-center gap-2"><AlertTriangle className="w-5 h-5" />Comment utiliser cette page</h3>
         <ul className="text-sm text-blue-700 space-y-2">
+          <li>• En haut de page, la <strong>vue simplifiée</strong> liste les dates à venir par salle : cochez une date lorsque la demande d'autorisation a été envoyée (l'état est partagé entre tous les utilisateurs)</li>
+          <li>• Une <strong>bonne date</strong> comporte au moins 2 matchs dans la salle ; les dates à match unique sont affichées en gris</li>
           <li>• Utilisez le filtre par salle pour voir uniquement les matchs d'une salle spécifique</li>
           <li>• Les salles avec un fond vert clair et l'icône ✓ sont des <strong>bons candidats pour ouvrir une buvette</strong></li>
           <li>• Un créneau buvette est détecté quand au moins 2 matchs se succèdent (écart ≤ 2h) dans la même salle</li>
