@@ -17,7 +17,13 @@ export default function Home() {
         
         {/* Boutons principaux */}
         <div className="flex flex-wrap gap-4 justify-center mb-8">
-          <Button asChild className="bg-yellow-500 text-blue-800 hover:bg-yellow-400 border-0">
+          <Button asChild className="bg-yellow-400 text-blue-900 hover:bg-yellow-300 border-0 h-12 px-6 text-base font-bold shadow-lg ring-4 ring-yellow-300/50 animate-pulse">
+            <Link href="/upload">
+              <Upload className="w-6 h-6 mr-2" />
+              <span className="font-semibold">Uploader le planning</span>
+            </Link>
+          </Button>
+          <Button asChild className="bg-white text-blue-800 hover:bg-gray-100 border-0">
             <Link href="/planning">
               <Calendar className="w-5 h-5 mr-2" />
               <span className="font-semibold">Calendrier</span>
@@ -39,12 +45,6 @@ export default function Home() {
             <Link href="/buvettes">
               <Beer className="w-5 h-5 mr-2" />
               <span className="font-semibold">Gestion buvettes</span>
-            </Link>
-          </Button>
-          <Button asChild className="bg-gray-700 text-white hover:bg-gray-600 border-0">
-            <Link href="/upload">
-              <Upload className="w-5 h-5 mr-2" />
-              <span className="font-semibold">Uploader un fichier</span>
             </Link>
           </Button>
         </div>
