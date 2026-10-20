@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Match } from "@/lib/utils";
+import { Match, getTeamDisplayName } from "@/lib/utils";
 import { Truck } from "lucide-react";
 
 // Couleurs EHR : Bleu et Jaune
@@ -33,17 +33,11 @@ export default function StatsPage() {
   }, []);
 
   // Calculer les statistiques
-  // Liste des équipes EHR
+  // Liste des équipes EHR (noms normalisés en base)
   const ehrTeams = new Set([
     'Seniors M', 'Seniors F1', 'Seniors F2',
-    'M17 departementale', 'M17 region',
-    'F17 CDF', 'F17 departementale',
-    'M15 region', 'M15 departementale',
-    'F15 region', 'F15 departementale',
-    'M13 region', 'M13 departementale',
-    'F13 departementale',
-    'M11 interdepartementale',
-    'F11 departementale'
+    'M18', 'F18', 'M17', 'F17', 'M15', 'F15',
+    'M13', 'F13', 'M11', 'F11'
   ]);
 
   const getTeamStats = () => {
@@ -51,10 +45,12 @@ export default function StatsPage() {
     matches.forEach((match) => {
       // Ne compter que les équipes EHR (home_team ou away_team)
       if (match.home_team && ehrTeams.has(match.home_team)) {
-        teamCounts[match.home_team] = (teamCounts[match.home_team] || 0) + 1;
+        const name = getTeamDisplayName(match.home_team);
+        teamCounts[name] = (teamCounts[name] || 0) + 1;
       }
       if (match.away_team && ehrTeams.has(match.away_team) && match.is_away) {
-        teamCounts[match.away_team] = (teamCounts[match.away_team] || 0) + 1;
+        const name = getTeamDisplayName(match.away_team);
+        teamCounts[name] = (teamCounts[name] || 0) + 1;
       }
     });
     return Object.entries(teamCounts)
@@ -119,7 +115,8 @@ export default function StatsPage() {
     
     matches.forEach((match) => {
       if (match.camionnette && match.home_team && match.is_home && match.location && ehrLocations.includes(match.location)) {
-        stats[match.home_team] = (stats[match.home_team] || 0) + 1;
+        const name = getTeamDisplayName(match.home_team);
+        stats[name] = (stats[name] || 0) + 1;
       }
     });
     
