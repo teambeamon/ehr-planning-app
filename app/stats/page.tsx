@@ -119,17 +119,20 @@ export default function StatsPage() {
   };
 
   // Stats des camionnettes par équipe : nombre d'utilisations et dernière utilisation
+  // Une réservation (équipe + date) compte pour une seule utilisation
   const getCamionnetteStats = () => {
-    const ehrLocations = ['Rodemack', 'Hettange (Hall)', 'Hettange (Poly)', 'Kanfen'];
     const stats: Record<string, { count: number; lastUsed: string | null }> = {};
+    const counted = new Set<string>();
 
     matches.forEach((match) => {
-      if (!match.camionnette || !match.is_home || !match.location) return;
+      if (!match.camionnette || !match.is_home || !match.date) return;
+      const key = `${match.date}|${match.camionnette}`;
+      if (counted.has(key)) return;
+      counted.add(key);
       const name = getTeamDisplayName(match.camionnette);
-      if (!ehrLocations.includes(match.location)) return;
       const entry = stats[name] || (stats[name] = { count: 0, lastUsed: null });
       entry.count += 1;
-      if (match.date && (!entry.lastUsed || match.date > entry.lastUsed)) {
+      if (!entry.lastUsed || match.date > entry.lastUsed) {
         entry.lastUsed = match.date;
       }
     });

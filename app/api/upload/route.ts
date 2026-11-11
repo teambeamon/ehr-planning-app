@@ -109,6 +109,45 @@ function isEHRTeam(name: string): boolean {
   return EHR_TEAMS.has(normalized);
 }
 
+// En-têtes de la zone camionnettes à ignorer (colonnes C et D)
+const CAMIONNETTE_EXCLUDED = new Set<string>([
+  'Dispo Salles', 'Réservation camionnettes', 'N° 1', 'N° 2', 'Coach',
+  'Réservation camionnette', 'Dispo', 'Salles', 'Réservation', 'camionnettes',
+  'Réservation camionnette N°1', 'Réservation camionnette N°2',
+  'Disponible', 'Libre', 'Camionnette N°1', 'Camionnette N°2'
+]);
+
+// Abréviations utilisées dans les colonnes C et D pour réserver une camionnette
+const CAMIONNETTE_MAPPINGS: Record<string, string> = {
+  'SG': 'Seniors M',
+  'SF1': 'Seniors F1', 'SF2': 'Seniors F2', 'SF 1': 'Seniors F1',
+  '17 CDF': 'F17CDF',
+  '17 Dep': 'F17Dep',
+  '15 G': 'M15',
+  '15 Dep': 'M15',
+  'M15 Dep': 'M15',
+  'F15 Dep': 'F15',
+  'M13 Dep': 'M13',
+  'F13 Dep': 'F13'
+};
+
+// Normaliser une cellule de réservation de camionnette (colonne C ou D) en équipe EHR
+function normalizeCamionnetteCell(value: string): string | null {
+  const trimmed = String(value || '').trim();
+  if (!trimmed || CAMIONNETTE_EXCLUDED.has(trimmed) || trimmed.length > 100) return null;
+  let cleaned = trimmed;
+  for (let i = 0; i < 3; i++) {
+    cleaned = cleaned
+      .replace(/^[-\s]+/, '')
+      .replace(/^(camionnette|n°)\s*/i, '')
+      .trim();
+  }
+  if (!cleaned) return null;
+  if (CAMIONNETTE_MAPPINGS[cleaned]) return CAMIONNETTE_MAPPINGS[cleaned];
+  const team = normalizeTeamName(cleaned);
+  return team && EHR_TEAMS.has(team) ? team : null;
+}
+
 function cleanText(str: string): string {
   if (!str) return '';
   return String(str).replace(/\r/g, '').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
@@ -275,22 +314,16 @@ async function parseExcelFile(buffer: Buffer): Promise<any[]> {
     }
 
     // Lire les camionnettes pour ce bloc (colonnes 2 et 3)
+    // Les cellules contiennent des abréviations (ex: "17 CDF", "15 G", "SF1"),
+    // éventuellement préfixées par "Camionnette" ou des tirets
     let dateCamionnette: string | null = null;
-    for (let r = rowIdx; r < rowIdx + blockSize && r < data.length; r++) {
+    for (let r = rowIdx; r < rowIdx + blockSize && r < data.length && !dateCamionnette; r++) {
       const cC = cleanText(String(data[r]?.[2] || ''));
       const cD = cleanText(String(data[r]?.[3] || ''));
-      if (cC && /camionnette/i.test(cC.toLowerCase())) {
-        const team = normalizeTeamName(cC.replace(/camionnette/gi, '').trim());
-        if (team && EHR_TEAMS.has(team)) {
-          dateCamionnette = team;
-        }
-      }
-      if (cD && /camionnette/i.test(cD.toLowerCase())) {
-        const team = normalizeTeamName(cD.replace(/camionnette/gi, '').trim());
-        if (team && EHR_TEAMS.has(team)) {
-          dateCamionnette = team;
-        }
-      }
+      const teamC = normalizeCamionnetteCell(cC);
+      const teamD = normalizeCamionnetteCell(cD);
+      // La colonne C a la priorité ; la colonne D sert de repli
+      dateCamionnette = teamC || teamD;
     }
 
     // Parcourir chaque colonne d'équipe
@@ -399,7 +432,7 @@ async function parseExcelFile(buffer: Buffer): Promise<any[]> {
         is_internal: isHome && away && isEHRTeam(home) && isEHRTeam(away),
         season: season,
         last_updated: lastUpdated,
-        camionnette: (isHome && !isAway && dateCamionnette && dateCamionnette === home) ? dateCamionnette : null
+        camionnette: (isHome && !isAway && dateCamionnette) ? dateCamionnette : null
       });
     }
   }
