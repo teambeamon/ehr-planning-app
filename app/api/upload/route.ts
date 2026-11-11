@@ -36,12 +36,13 @@ function normalizeTeamName(name: string): string {
     if (/CDF/.test(upper) || /ÉQUIP(EMENT)?\s*1/.test(upper)) return 'F17CDF';
     if (/D[ÉE]P/.test(upper) || /ÉQUIP(EMENT)?\s*2/.test(upper)) return 'F17Dep';
   }
-  // Distinguer les deux équipes 17 ans Garçons :
-  // - équipe départementale -> M17Dep
-  // - équipe régionale -> M17Reg
+  // Distinguer les deux équipes 17 ans Garçons (toutes deux Départemental) :
+  // le nom en ligne 12 contient le numéro d'équipe (ex: "17 ans G 1 (Dépt)")
+  // - équipe 1 -> M17Dep1
+  // - équipe 2 -> M17Dep2
   if (/17\s*ANS\s*G|^17\s*G|^M17/.test(upper)) {
-    if (/R[ÉE]GION|\bREG\b/.test(upper)) return 'M17Reg';
-    if (/D[ÉE]P/.test(upper)) return 'M17Dep';
+    if (/(^|\s)1(\s|$)/.test(upper) || /ÉQUIP(EMENT)?\s*1/.test(upper)) return 'M17Dep1';
+    if (/(^|\s)2(\s|$)/.test(upper) || /ÉQUIP(EMENT)?\s*2/.test(upper)) return 'M17Dep2';
   }
   cleaned = cleaned.replace(/\s*\([^)]*\)/g, '').trim();
   cleaned = cleaned
@@ -76,7 +77,7 @@ function normalizeTeamName(name: string): string {
     'SM': 'Seniors M',
     'SF1': 'Seniors F1', 'Seniors F1': 'Seniors F1',
     'SF2': 'Seniors F2', 'Seniors F2': 'Seniors F2',
-    'M17': 'M17', 'M17Dep': 'M17Dep', 'M17Reg': 'M17Reg', 'F17': 'F17', 'F17CDF': 'F17CDF', 'F17Dep': 'F17Dep', 'M15': 'M15', 'F15': 'F15',
+    'M17': 'M17', 'M17Dep1': 'M17Dep1', 'M17Dep2': 'M17Dep2', 'F17': 'F17', 'F17CDF': 'F17CDF', 'F17Dep': 'F17Dep', 'M15': 'M15', 'F15': 'F15',
     'M13': 'M13', 'F13': 'F13', 'M11': 'M11', 'F11': 'F11'
   };
   const result = mapping[cleaned] || cleaned;
@@ -96,7 +97,7 @@ function getCategoryFromText(text: string): string {
 
 const EHR_TEAMS = new Set<string>([
   'Seniors M', 'Seniors F1', 'Seniors F2',
-  'M17', 'M17Dep', 'M17Reg', 'F17', 'F17CDF', 'F17Dep', 'M15', 'F15', 'M13', 'F13', 'M11', 'F11'
+  'M17', 'M17Dep1', 'M17Dep2', 'F17', 'F17CDF', 'F17Dep', 'M15', 'F15', 'M13', 'F13', 'M11', 'F11'
 ]);
 
 function isEHRTeam(name: string): boolean {

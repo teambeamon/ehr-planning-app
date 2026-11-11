@@ -165,7 +165,7 @@ export async function saveAllMatches(matches: any[]) {
 
 // Helper pour convertir les rows en Match
 function rowToMatch(row: any): Match {
-  const EHR_TEAMS = new Set(['Seniors M', 'Seniors F1', 'Seniors F2', 'M17', 'M17Dep', 'M17Reg', 'F17', 'F17CDF', 'F17Dep', 'M15', 'F15', 'M13', 'F13', 'M11', 'F11']);
+  const EHR_TEAMS = new Set(['Seniors M', 'Seniors F1', 'Seniors F2', 'M17', 'M17Dep1', 'M17Dep2', 'F17', 'F17CDF', 'F17Dep', 'M15', 'F15', 'M13', 'F13', 'M11', 'F11']);
   const EHR_LOCATIONS = ['Rodemack', 'Hettange (Hall)', 'Hettange (Poly)', 'Kanfen'];
   
   const isEHRTeam = (name: string | null): boolean => {
@@ -313,7 +313,7 @@ export async function getWeekendMatchesFromDB(): Promise<Match[]> {
 }
 
 // Équipes EHR
-const EHR_TEAMS = new Set(['Seniors M', 'Seniors F1', 'Seniors F2', 'M17', 'M17Dep', 'M17Reg', 'F17', 'F17CDF', 'F17Dep', 'M15', 'F15', 'M13', 'F13', 'M11', 'F11']);
+const EHR_TEAMS = new Set(['Seniors M', 'Seniors F1', 'Seniors F2', 'M17', 'M17Dep1', 'M17Dep2', 'F17', 'F17CDF', 'F17Dep', 'M15', 'F15', 'M13', 'F13', 'M11', 'F11']);
 const EHR_LOCATIONS = ['Rodemack', 'Hettange (Hall)', 'Hettange (Poly)', 'Kanfen', 'Extérieur'];
 
 // Récupérer les équipes
@@ -402,7 +402,7 @@ export async function getLastUpdatedFromDB(): Promise<string | null> {
 const TEAM_DISPLAY: Record<string, string> = {
   'Seniors M': 'Seniors Masculins', 'Seniors F1': 'Seniors Filles 1', 'Seniors F2': 'Seniors Filles 2',
   'M17': '17 ans Garçons',
-  'M17Dep': '17 ans Garçons Départemental', 'M17Reg': '17 ans Garçons Régional',
+  'M17Dep1': '17 ans Garçons Départemental 1', 'M17Dep2': '17 ans Garçons Départemental 2',
   'F17': '17 ans Filles',
   'F17CDF': '17 ans Filles Championnat de France', 'F17Dep': '17 ans Filles Départemental',
   'M15': '15 ans Garçons Régional', 'F15': '15 ans Filles Régional',

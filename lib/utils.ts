@@ -43,8 +43,8 @@ const TEAM_DISPLAY_NAMES: Record<string, string> = {
   'Seniors F1': 'Seniors Filles 1',
   'Seniors F2': 'Seniors Filles 2',
   'M17': '17 ans Garçons',
-  'M17Dep': '17 ans Garçons Départemental',
-  'M17Reg': '17 ans Garçons Régional',
+  'M17Dep1': '17 ans Garçons Départemental 1',
+  'M17Dep2': '17 ans Garçons Départemental 2',
   'F17': '17 ans Filles',
   'F17CDF': '17 ans Filles Championnat de France',
   'F17Dep': '17 ans Filles Départemental',
@@ -59,7 +59,7 @@ const TEAM_DISPLAY_NAMES: Record<string, string> = {
 // Liste des équipes EHR (noms normalisés)
 const EHR_TEAM_NAMES = new Set([
   'Seniors M', 'Seniors F1', 'Seniors F2',
-  'M17', 'M17Dep', 'M17Reg',
+  'M17', 'M17Dep1', 'M17Dep2',
   'F17', 'F17CDF', 'F17Dep',
   'M15', 'F15',
   'M13', 'F13',
