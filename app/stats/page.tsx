@@ -8,8 +8,6 @@ import { Truck } from "lucide-react";
 
 // Couleurs EHR : Bleu et Jaune
 const COLORS = ['#1e40af', '#3b82f6', '#60a5fa', '#93c5fd', '#fbbf24', '#facc15', '#f59e0b', '#d97706'];
-// Couleurs supplémentaires pour les camionnettes
-const CAMIONNETTE_COLORS = ['#8b5cf6', '#ec4899', '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#06b6d4'];
 
 export default function StatsPage() {
   const [matches, setMatches] = useState<Match[]>([]);
@@ -31,6 +29,13 @@ export default function StatsPage() {
 
     fetchMatches();
   }, []);
+
+  // Formater une date ISO (YYYY-MM-DD) en jj/mm/aaaa
+  const formatDate = (date: string | null) => {
+    if (!date) return "-";
+    const parts = date.split("-");
+    return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : date;
+  };
 
   // Calculer les statistiques
   // Liste des équipes EHR (noms normalisés en base)
@@ -113,21 +118,25 @@ export default function StatsPage() {
       });
   };
 
-  // Stats des camionnettes par équipe (uniquement équipes EHR)
+  // Stats des camionnettes par équipe : nombre d'utilisations et dernière utilisation
   const getCamionnetteStats = () => {
     const ehrLocations = ['Rodemack', 'Hettange (Hall)', 'Hettange (Poly)', 'Kanfen'];
-    const stats: Record<string, number> = {};
-    
+    const stats: Record<string, { count: number; lastUsed: string | null }> = {};
+
     matches.forEach((match) => {
-      if (match.camionnette && match.home_team && match.is_home && match.location && ehrLocations.includes(match.location)) {
-        const name = getTeamDisplayName(match.home_team);
-        stats[name] = (stats[name] || 0) + 1;
+      if (!match.camionnette || !match.is_home || !match.location) return;
+      const name = getTeamDisplayName(match.camionnette);
+      if (!ehrLocations.includes(match.location)) return;
+      const entry = stats[name] || (stats[name] = { count: 0, lastUsed: null });
+      entry.count += 1;
+      if (match.date && (!entry.lastUsed || match.date > entry.lastUsed)) {
+        entry.lastUsed = match.date;
       }
     });
-    
+
     return Object.entries(stats)
-      .map(([team, count]) => ({ team, count }))
-      .sort((a, b) => b.count - a.count);
+      .map(([team, s]) => ({ team, count: s.count, lastUsed: s.lastUsed }))
+      .sort((a, b) => b.count - a.count || a.team.localeCompare(b.team));
   };
 
   // Memoize all stats calculations
@@ -286,35 +295,38 @@ export default function StatsPage() {
         </div>
 
         {/* Camionnettes par Équipe */}
-        {camionnetteStats.length > 0 && (
-          <div className="card">
-            <h2 className="text-xl font-semibold text-blue-800 mb-6 flex items-center gap-2">
-              <Truck className="w-6 h-6" />
-              Camionnettes par Équipe
-            </h2>
-            <ResponsiveContainer width="100%" height={350}>
-              <BarChart data={camionnetteStats} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#e0e7ff" />
-                <XAxis type="number" tick={{ fill: '#4f46e5', fontSize: 12 }} />
-                <YAxis dataKey="team" type="category" width={120} tick={{ fill: '#4f46e5', fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#1e40af',
-                    border: 'none',
-                    borderRadius: '8px',
-                    color: 'white'
-                  }}
-                  formatter={(value: number) => [`${value} réservations`, 'Camionnette']}
-                />
-                <Bar dataKey="count" radius={[8, 8, 0, 0]}>
-                  {camionnetteStats.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={CAMIONNETTE_COLORS[index % CAMIONNETTE_COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
+        <div className="card">
+          <h2 className="text-xl font-semibold text-blue-800 mb-2 flex items-center gap-2">
+            <Truck className="w-6 h-6" />
+            Camionnettes par Équipe
+          </h2>
+          {camionnetteStats.length === 0 ? (
+            <p className="text-sm text-gray-500">Aucune réservation de camionnette.</p>
+          ) : (
+            <>
+              <p className="text-sm text-gray-600 mb-4">
+                {camionnetteStats.reduce((total, s) => total + s.count, 0)} utilisation(s) au total — dernière :{" "}
+                {formatDate(
+                  camionnetteStats.reduce<string | null>(
+                    (latest, s) => (!s.lastUsed || (latest && s.lastUsed <= latest) ? latest : s.lastUsed),
+                    null
+                  )
+                )}
+              </p>
+              <ul className="space-y-2">
+                {camionnetteStats.map(({ team, count, lastUsed }) => (
+                  <li key={team} className="flex items-center gap-3">
+                    <span className="flex-1 text-sm font-medium text-gray-700">{team}</span>
+                    <span className="text-sm text-gray-500">
+                      Dernière : {formatDate(lastUsed)}
+                    </span>
+                    <span className="w-12 text-right text-sm font-bold text-blue-800">{count}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
