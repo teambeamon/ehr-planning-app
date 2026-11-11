@@ -8,9 +8,26 @@ import { ChevronLeft, ChevronRight, Download, Loader2 } from "lucide-react";
 const EHR_LOCATIONS = ["Rodemack", "Hettange (Hall)", "Hettange (Poly)", "Kanfen"];
 const MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
 const DAYS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+const DAYS_SHORT = ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."];
 
-// Largeur de l'affiche en pixels : A3 portrait à 96 dpi (297 mm)
+// Dimensions de l'affiche : A3 portrait à 96 dpi (297 x 420 mm)
 const POSTER_WIDTH_PX = 1123;
+const POSTER_HEIGHT_PX = 1587;
+
+// Hauteurs fixes des zones de l'affiche
+const HEADER_H = 170;
+const FOOTER_H = 70;
+const WEEKEND_BAND_H = 48;
+const MIDDLE_PAD = 48; // py-6 (24 top + 24 bottom)
+const BLOCK_GAP = 16; // gap-4 entre week-ends
+
+// Paliers de densité selon la hauteur disponible par ligne de match
+const ROW_SIZES = {
+  big: { day: "text-xl", time: "text-3xl", match: "text-2xl", badge: "text-lg" },
+  medium: { day: "text-lg", time: "text-2xl", match: "text-xl", badge: "text-base" },
+  small: { day: "text-base", time: "text-xl", match: "text-lg", badge: "text-sm" },
+  tiny: { day: "text-sm", time: "text-lg", match: "text-base", badge: "text-xs" },
+} as const;
 
 const toIsoDate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -22,9 +39,9 @@ function saturdayOf(dateIso: string): string {
   return toIsoDate(d);
 }
 
-const formatLong = (dateIso: string) => {
+const dayShort = (dateIso: string) => {
   const d = new Date(dateIso);
-  return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  return `${DAYS_SHORT[d.getDay()]} ${d.getDate()}`;
 };
 
 const formatShort = (dateIso: string) => {
@@ -35,44 +52,17 @@ const formatShort = (dateIso: string) => {
 const gymBadge = (location: string) => {
   switch (location) {
     case "Rodemack":
-      return "bg-yellow-300 text-yellow-900 border-yellow-500";
+      return "bg-yellow-300 text-yellow-900";
     case "Hettange (Hall)":
-      return "bg-blue-700 text-white border-blue-900";
+      return "bg-blue-700 text-white";
     case "Hettange (Poly)":
-      return "bg-blue-200 text-blue-900 border-blue-400";
+      return "bg-blue-200 text-blue-900";
     case "Kanfen":
-      return "bg-orange-400 text-white border-orange-600";
+      return "bg-orange-400 text-white";
     default:
-      return "bg-gray-200 text-gray-800 border-gray-400";
+      return "bg-gray-200 text-gray-800";
   }
 };
-
-/// Logo EHR : utilise /logo.png si présent, sinon un badge SVG
-function EhrLogo() {
-  const [imgOk, setImgOk] = useState(true);
-  return (
-    <div className="w-32 h-32 shrink-0 flex items-center justify-center">
-      {imgOk ? (
-        <img
-          src="/logo.png"
-          alt="Logo EHR"
-          className="w-full h-full object-contain"
-          onError={() => setImgOk(false)}
-        />
-      ) : (
-        <svg viewBox="0 0 120 120" className="w-full h-full">
-          <circle cx="60" cy="48" r="32" fill="#facc15" stroke="#ffffff" strokeWidth="3" />
-          <path d="M28 48h64" stroke="#1e3a8a" strokeWidth="3" fill="none" strokeLinecap="round" />
-          <path d="M60 16c-12 10-12 54 0 64" stroke="#1e3a8a" strokeWidth="3" fill="none" strokeLinecap="round" />
-          <path d="M60 16c12 10 12 54 0 64" stroke="#1e3a8a" strokeWidth="3" fill="none" strokeLinecap="round" />
-          <text x="60" y="112" textAnchor="middle" fontSize="24" fontWeight="800" fill="#ffffff">
-            EHR
-          </text>
-        </svg>
-      )}
-    </div>
-  );
-}
 
 export default function AffichePage() {
   const [matches, setMatches] = useState<Match[]>([]);
@@ -153,13 +143,33 @@ export default function AffichePage() {
       .sort((a, b) => a.saturday.localeCompare(b.saturday));
   }, [matches, selected]);
 
+  // Adapter la densité des lignes pour que TOUT tienne sur une seule page :
+  // plus il y a de matchs, plus les lignes sont compactes
+  const { rowH, rowSize } = useMemo(() => {
+    const totalMatches = weekends.reduce((t, w) => t + w.days.reduce((s, d) => s + d.matches.length, 0), 0);
+    const weeks = weekends.length;
+    const available =
+      POSTER_HEIGHT_PX -
+      HEADER_H -
+      FOOTER_H -
+      MIDDLE_PAD -
+      Math.max(0, weeks - 1) * BLOCK_GAP -
+      weeks * WEEKEND_BAND_H;
+    let h = 62;
+    if (weeks > 0 && totalMatches > 0) {
+      h = Math.min(62, Math.max(26, Math.floor(available / totalMatches)));
+    }
+    const tier = h >= 54 ? "big" : h >= 40 ? "medium" : h >= 32 ? "small" : "tiny";
+    return { rowH: h, rowSize: ROW_SIZES[tier as keyof typeof ROW_SIZES] };
+  }, [weekends]);
+
   const opponentOf = (m: Match) => {
     if (!m.away_team) return "À déterminer";
     const ehrNames = ["Seniors M", "Seniors F1", "Seniors F2", "M17", "F17", "M17Dep1", "M17Dep2", "F17CDF", "F17Dep", "M15", "F15", "M13", "F13", "M11", "F11"];
     return ehrNames.includes(m.away_team) ? getTeamDisplayName(m.away_team) : m.away_team;
   };
 
-  // Générer le PDF : chaque page est un format exact (A3 ou A4), les week-ends ne sont jamais coupés
+  // Générer le PDF : l'affiche complète tient toujours sur UNE page (A3 ou A4)
   const generatePdf = async () => {
     if (!posterRef.current || isGenerating) return;
     setIsGenerating(true);
@@ -167,85 +177,27 @@ export default function AffichePage() {
       const { default: html2canvas } = await import("html2canvas");
       const { jsPDF } = await import("jspdf");
 
-      const sections = Array.from(
-        posterRef.current.querySelectorAll<HTMLElement>(".pdf-section")
-      );
-      const scale = 2; // qualité d'image
-
-      const canvases: HTMLCanvasElement[] = [];
-      for (const section of sections) {
-        const rect = section.getBoundingClientRect();
-        const canvas = await html2canvas(section, {
-          scale,
-          backgroundColor: "#ffffff",
-          width: POSTER_WIDTH_PX,
-          height: Math.ceil(rect.height),
-          windowWidth: POSTER_WIDTH_PX,
-        });
-        canvases.push(canvas);
-      }
-
-      const imgWidthMm = format === "A3" ? 297 : 210;
-      const pageHeightMm = format === "A3" ? 420 : 297;
-      const gap = 5; // mm entre sections sur une même page
-
-      const pxToMm = (px: number) => (px / POSTER_WIDTH_PX) * imgWidthMm;
-
-      // Découper une section plus haute qu'une page (rare) en tranches pleines pages
-      const sliceCanvas = (canvas: HTMLCanvasElement, maxRealPx: number): { canvas: HTMLCanvasElement; hMm: number }[] => {
-        const slices: { canvas: HTMLCanvasElement; hMm: number }[] = [];
-        const slicePx = Math.floor(maxRealPx) * scale;
-        for (let y = 0; y < canvas.height; y += slicePx) {
-          const h = Math.min(slicePx, canvas.height - y);
-          const tmp = document.createElement("canvas");
-          tmp.width = canvas.width;
-          tmp.height = h;
-          const ctx = tmp.getContext("2d")!;
-          ctx.fillStyle = "#ffffff";
-          ctx.fillRect(0, 0, tmp.width, tmp.height);
-          ctx.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
-          slices.push({ canvas: tmp, hMm: pxToMm(h / scale) });
-        }
-        return slices.length > 0 ? slices : [{ canvas, hMm: pxToMm(canvas.height / scale) }];
-      };
-
-      // Regrouper les sections page par page, un week-end n'est jamais coupé
-      type Placed = { canvas: HTMLCanvasElement; yMm: number };
-      const pages: { items: Placed[] }[] = [];
-      let currentItems: Placed[] = [];
-      let currentUsedMm = 0;
-
-      const place = (canvas: HTMLCanvasElement, hMm: number) => {
-        if (currentItems.length > 0 && currentUsedMm + hMm > pageHeightMm) {
-          pages.push({ items: currentItems });
-          currentItems = [];
-          currentUsedMm = 0;
-        }
-        currentItems.push({ canvas, yMm: currentUsedMm });
-        currentUsedMm += hMm + gap;
-      };
-
-      for (const canvas of canvases) {
-        const hMm = pxToMm(canvas.height / scale);
-        const maxRealPx = (pageHeightMm / imgWidthMm) * POSTER_WIDTH_PX;
-        if (hMm > pageHeightMm) {
-          sliceCanvas(canvas, maxRealPx).forEach((s) => place(s.canvas, s.hMm));
-        } else {
-          place(canvas, hMm);
-        }
-      }
-      if (currentItems.length > 0) pages.push({ items: currentItems });
-
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format });
-      pages.forEach(({ items }, pageIndex) => {
-        if (pageIndex > 0) pdf.addPage();
-        items.forEach(({ canvas, yMm }) => {
-          const wMm = imgWidthMm;
-          const hMm = pxToMm(canvas.height / scale);
-          pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, yMm, wMm, hMm, undefined, "FAST");
-        });
+      const canvas = await html2canvas(posterRef.current, {
+        scale: 2,
+        backgroundColor: "#ffffff",
+        width: POSTER_WIDTH_PX,
+        height: POSTER_HEIGHT_PX,
+        windowWidth: POSTER_WIDTH_PX,
       });
 
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format });
+      const pageWidthMm = format === "A3" ? 297 : 210;
+      const pageHeightMm = pageWidthMm * (POSTER_HEIGHT_PX / POSTER_WIDTH_PX);
+      pdf.addImage(
+        canvas.toDataURL("image/png"),
+        "PNG",
+        0,
+        0,
+        pageWidthMm,
+        pageHeightMm,
+        undefined,
+        "FAST"
+      );
       pdf.save(`affiche-matchs-domicile-${MONTHS[selected.month]}-${selected.year}-${format}.pdf`);
     } catch (error) {
       console.error("Erreur génération PDF:", error);
@@ -315,98 +267,96 @@ export default function AffichePage() {
         </div>
       </div>
 
-      {/* Affiche : largeur fixe A3 pour un rendu identique à l'écran et dans le PDF */}
-      <div className="no-print mb-1 text-xs text-gray-400">
-        Faites défiler horizontalement si l&apos;affiche dépasse la largeur de l&apos;écran.
-      </div>
+      {/* Affiche : dimension A3 exacte (une page), hauteur fixe = aucun décalage possible */}
       <div className="overflow-x-auto pb-6">
-        <div ref={posterRef} className="bg-white shadow-xl mx-auto" style={{ width: POSTER_WIDTH_PX }}>
-          {/* En-tête de l'affiche */}
-          <div className="pdf-section bg-gradient-to-r from-blue-900 via-blue-700 to-yellow-400 text-white px-12 py-10 flex items-center justify-between">
-            <div>
-              <p className="text-yellow-300 text-xl font-semibold tracking-widest uppercase">
+        <div
+          ref={posterRef}
+          className="bg-white shadow-xl mx-auto flex flex-col overflow-hidden"
+          style={{ width: POSTER_WIDTH_PX, height: POSTER_HEIGHT_PX }}
+        >
+          {/* En-tête */}
+          <div
+            className="bg-gradient-to-r from-blue-900 via-blue-700 to-yellow-400 text-white px-12 flex items-center gap-10 shrink-0"
+            style={{ height: HEADER_H }}
+          >
+            <img src="/logo.png" alt="Logo EHR" className="h-32 w-auto object-contain" />
+            <div className="flex-1 text-center">
+              <p className="text-yellow-300 text-lg font-semibold tracking-widest uppercase">
                 Entente Hettange Rodemack
               </p>
-              <h2 className="text-6xl font-extrabold leading-tight mt-2">Matchs à domicile</h2>
-              <p className="text-3xl text-blue-100 capitalize mt-2">
+              <h2 className="text-5xl font-extrabold leading-tight mt-1">Matchs à domicile</h2>
+              <p className="text-3xl text-blue-50 capitalize mt-1">
                 {MONTHS[selected.month]} {selected.year}
               </p>
             </div>
-            <EhrLogo />
+            <div className="w-44" aria-hidden="true" />
           </div>
 
-          {/* Corps : un bloc par week-end */}
-          <div className="bg-white px-10 py-8">
+          {/* Corps : une bande par week-end, une ligne par match */}
+          <div className="flex-1 flex flex-col px-10 py-6 gap-4 min-h-0">
             {weekends.length === 0 ? (
-              <div className="pdf-section text-center py-20 border-2 border-dashed border-blue-200 rounded-none">
-                <p className="text-4xl font-bold text-blue-800">Pas de match à domicile ce mois-ci</p>
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-4xl font-bold text-blue-800">
+                  Pas de match à domicile ce mois-ci
+                </p>
               </div>
             ) : (
-              <div className="space-y-8">
-                {weekends.map(({ saturday, days }) => {
-                  const label =
-                    days.length > 1
-                      ? `Week-end du ${formatShort(days[0].date)} au ${formatShort(days[days.length - 1].date)}`
-                      : formatLong(days[0].date);
-                  return (
-                    <section key={saturday} className="pdf-section border-2 border-blue-100">
-                      <div className="bg-blue-800 text-white px-8 py-4 border-b-4 border-yellow-400">
-                        <h3 className="text-3xl font-bold capitalize">{label}</h3>
-                      </div>
-                      <div className={`grid gap-0 ${days.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
-                        {days.map((day, dayIndex) => (
-                          <div
-                            key={day.date}
-                            className={`p-6 ${
-                              days.length > 1 && dayIndex % 2 === 1 ? "border-l border-blue-100" : ""
-                            } ${days.length > 1 && dayIndex > 1 ? "border-t border-blue-100" : ""}`}
+              weekends.map(({ saturday, days }) => (
+                <div key={saturday} className="border-2 border-blue-100">
+                  <div
+                    className="bg-blue-800 text-white px-6 flex items-center border-b-4 border-yellow-400"
+                    style={{ height: WEEKEND_BAND_H }}
+                  >
+                    <h3 className="text-2xl font-bold capitalize">
+                      {days.length > 1
+                        ? `Week-end du ${formatShort(days[0].date)} au ${formatShort(days[days.length - 1].date)}`
+                        : `${formatShort(days[0].date)}`}
+                    </h3>
+                  </div>
+                  <ul>
+                    {days.flatMap((day, dayIdx) =>
+                      day.matches.map((m, i) => (
+                        <li
+                          key={`${day.date}-${i}`}
+                          className={`flex items-center gap-4 px-6 whitespace-nowrap overflow-hidden ${
+                            i % 2 === 0 ? "bg-blue-50" : "bg-white"
+                          } ${dayIdx > 0 && i === 0 ? "border-t-2 border-blue-200" : ""}`}
+                          style={{ height: rowH }}
+                        >
+                          <span className={`${rowSize.day} font-semibold text-blue-700 w-24 shrink-0 capitalize`}>
+                            {dayShort(day.date)}
+                          </span>
+                          <span className={`${rowSize.time} font-extrabold text-blue-800 tabular-nums w-20 shrink-0 text-center`}>
+                            {m.time || "à définir"}
+                          </span>
+                          <span className={`${rowSize.match} leading-tight min-w-0`}>
+                            <span className="font-bold text-gray-900">{getTeamDisplayName(m.home_team)}</span>
+                            <span className="text-gray-400 mx-2">vs</span>
+                            <span className="text-blue-700">{opponentOf(m)}</span>
+                          </span>
+                          <span
+                            className={`${rowSize.badge} font-bold px-3 py-1 rounded-md shrink-0 ml-auto ${gymBadge(m.location || "")}`}
                           >
-                            <div className="mb-5 pb-3 border-b-4 border-yellow-400">
-                              <h4 className="text-2xl font-extrabold text-blue-700 capitalize">
-                                {formatLong(day.date)}
-                              </h4>
-                            </div>
-                            <ul className="space-y-4">
-                              {day.matches.map((m, i) => (
-                                <li
-                                  key={`${m.date}-${m.home_team}-${m.time}-${i}`}
-                                  className="flex items-center gap-5 rounded-none bg-blue-50 border border-blue-100 px-5 py-4"
-                                >
-                                  <span className="text-3xl font-extrabold text-blue-800 tabular-nums w-24 shrink-0">
-                                    {m.time || "à définir"}
-                                  </span>
-                                  <span className="flex-1 text-2xl leading-snug">
-                                    <span className="font-bold text-gray-900">
-                                      {getTeamDisplayName(m.home_team)}
-                                    </span>
-                                    <span className="text-gray-400 mx-2 font-medium">vs</span>
-                                    <span className="text-blue-700">{opponentOf(m)}</span>
-                                  </span>
-                                  <span
-                                    className={`inline-block text-lg font-bold px-4 py-1.5 rounded-none border-2 shrink-0 ${gymBadge(m.location || "")}`}
-                                  >
-                                    {m.location}
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  );
-                })}
-              </div>
+                            {m.location}
+                          </span>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                </div>
+              ))
             )}
           </div>
 
           {/* Pied de l'affiche */}
-          <div className="pdf-section bg-blue-900 text-white px-12 py-6 flex items-center justify-between">
+          <div
+            className="bg-blue-900 text-white px-12 flex items-center justify-between shrink-0"
+            style={{ height: FOOTER_H }}
+          >
             <p className="text-2xl font-bold text-yellow-300">Venez nombreux encourager nos équipes !</p>
-            <div className="text-right text-blue-100 text-sm leading-snug">
-              <p>Hettange (Hall) - Hettange (Poly) - Rodemack - Kanfen</p>
-              <p>Horaires susceptibles de modification</p>
-            </div>
+            <p className="text-blue-100 text-sm">
+              Hettange (Hall) - Hettange (Poly) - Rodemack - Kanfen | Horaires susceptibles de modification
+            </p>
           </div>
         </div>
       </div>
