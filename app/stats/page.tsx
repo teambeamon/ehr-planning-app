@@ -42,6 +42,11 @@ export default function StatsPage() {
 
   const getTeamStats = () => {
     const teamCounts: Record<string, number> = {};
+    // Initialiser avec toutes les équipes EHR (0 match si absente des données)
+    Array.from(ehrTeams).forEach((t) => {
+      const name = getTeamDisplayName(t);
+      teamCounts[name] = 0;
+    });
     matches.forEach((match) => {
       // Ne compter que les équipes EHR (home_team ou away_team)
       if (match.home_team && ehrTeams.has(match.home_team)) {
@@ -55,7 +60,7 @@ export default function StatsPage() {
     });
     return Object.entries(teamCounts)
       .map(([team, count]) => ({ team, count }))
-      .sort((a, b) => b.count - a.count);
+      .sort((a, b) => b.count - a.count || a.team.localeCompare(b.team));
   };
 
   const getLocationStats = () => {
@@ -202,22 +207,23 @@ export default function StatsPage() {
           <h2 className="text-xl font-semibold text-blue-800 mb-6">
             📊 Matchs par Équipe
           </h2>
-          <ResponsiveContainer width="100%" height={350}>
-            <BarChart data={teamStats}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e0e7ff" />
-              <XAxis dataKey="team" tick={{ fill: '#4f46e5', fontSize: 12 }} />
-              <YAxis tick={{ fill: '#4f46e5', fontSize: 12 }} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1e40af',
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: 'white'
-                }}
-              />
-              <Bar dataKey="count" fill="#1e40af" radius={[8, 8, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <ul className="space-y-2">
+            {teamStats.map(({ team, count }) => {
+              const maxCount = teamStats[0]?.count || 1;
+              return (
+                <li key={team} className="flex items-center gap-3">
+                  <span className="flex-1 text-sm font-medium text-gray-700">{team}</span>
+                  <div className="hidden sm:block w-32 h-4 bg-blue-100 rounded-full overflow-hidden" aria-hidden="true">
+                    <div
+                      className="h-full bg-blue-600 rounded-full"
+                      style={{ width: `${Math.round((count / maxCount) * 100)}%` }}
+                    />
+                  </div>
+                  <span className="w-12 text-right text-sm font-bold text-blue-800">{count}</span>
+                </li>
+              );
+            })}
+          </ul>
         </div>
 
         {/* Matchs par Lieu */}
