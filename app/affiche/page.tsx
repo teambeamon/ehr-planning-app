@@ -75,6 +75,33 @@ const groupLabel = (dates: string[]) => {
   return d.getDay() === 6 ? `Samedi ${formatShort(dates[0])}` : `Dimanche ${formatShort(dates[0])}`;
 };
 
+// Entrées d'une journée : les matchs Garçons 17 Départemental 1 et 2 jouent le même
+// championnat -> quand les deux reçoivent le même jour, on les fusionne en un seul
+// bloc (le championnat n'est mentionné qu'une seule fois sur l'affiche)
+type DayEntry =
+  | { kind: "match"; match: Match; firstTime: string }
+  | { kind: "m17Group"; matches: Match[]; firstTime: string };
+
+const isM17Dep = (m: Match) => m.home_team === "M17Dep1" || m.home_team === "M17Dep2";
+
+const buildDayEntries = (dayMatches: Match[]): DayEntry[] => {
+  const m17Matches = dayMatches.filter(isM17Dep);
+  const hasBoth =
+    m17Matches.some((m) => m.home_team === "M17Dep1") &&
+    m17Matches.some((m) => m.home_team === "M17Dep2");
+
+  const entries: DayEntry[] = dayMatches
+    .filter((m) => !(hasBoth && isM17Dep(m)))
+    .map((m) => ({ kind: "match" as const, match: m, firstTime: m.time || "zz" }));
+
+  if (hasBoth) {
+    const grouped = [...m17Matches].sort((a, b) => (a.time || "zz").localeCompare(b.time || "zz"));
+    entries.push({ kind: "m17Group", matches: grouped, firstTime: grouped[0].time || "zz" });
+  }
+
+  return entries.sort((a, b) => a.firstTime.localeCompare(b.firstTime));
+};
+
 const gymBadge = (location: string) => {
   switch (location) {
     case "Rodemack":
@@ -339,32 +366,83 @@ export default function AffichePage() {
                   </div>
                   <ul>
                     {days.flatMap((day, dayIdx) =>
-                      day.matches.map((m, i) => (
-                        <li
-                          key={`${day.date}-${i}`}
-                          className={`flex items-center gap-4 px-6 whitespace-nowrap overflow-hidden ${
-                            i % 2 === 0 ? "bg-blue-50" : "bg-white"
-                          } ${dayIdx > 0 && i === 0 ? "border-t-2 border-blue-200" : ""}`}
-                          style={{ height: rowH }}
-                        >
-                          <span className={`${rowSize.day} font-semibold text-blue-700 w-24 shrink-0 capitalize`}>
-                            {dayShort(day.date)}
-                          </span>
-                          <span className={`${rowSize.time} font-extrabold text-blue-800 tabular-nums w-20 shrink-0 text-center`}>
-                            {m.time || "à définir"}
-                          </span>
-                          <span className={`${rowSize.match} leading-tight min-w-0`}>
-                            <span className="font-bold text-gray-900">{getTeamDisplayName(m.home_team)}</span>
-                            <span className="text-gray-400 mx-2">vs</span>
-                            <span className="text-blue-700">{opponentOf(m)}</span>
-                          </span>
-                          <span
-                            className={`${rowSize.badge} font-bold px-3 py-1 rounded-md shrink-0 ml-auto ${gymBadge(m.location || "")}`}
+                      buildDayEntries(day.matches).map((entry, entryIdx) => {
+                        const stripe = entryIdx % 2 === 0 ? "bg-blue-50" : "bg-white";
+                        const separator =
+                          dayIdx > 0 && entryIdx === 0 ? "border-t-2 border-blue-200" : "";
+
+                        if (entry.kind === "m17Group") {
+                          return (
+                            <li
+                              key={`${day.date}-m17`}
+                              className={`flex items-stretch gap-4 px-6 whitespace-nowrap overflow-hidden ${stripe} ${separator}`}
+                              style={{ height: rowH * entry.matches.length }}
+                            >
+                              <div className="flex flex-col justify-center shrink-0 w-24">
+                                <span className={`${rowSize.day} font-semibold text-blue-700 capitalize`}>
+                                  {dayShort(day.date)}
+                                </span>
+                              </div>
+                              <div className="flex flex-col justify-center shrink-0">
+                                <span className={`${rowSize.match} font-bold text-gray-900 leading-snug`}>
+                                  17 ans Garçons Départemental
+                                </span>
+                              </div>
+                              <div className="flex-1 flex flex-col justify-center min-w-0">
+                                {entry.matches.map((m, i) => (
+                                  <div key={i} className="flex items-center gap-3" style={{ height: rowH }}>
+                                    <span className={`${rowSize.time} font-extrabold text-blue-800 tabular-nums w-20 shrink-0 text-center`}>
+                                      {m.time || "à définir"}
+                                    </span>
+                                    <span className={`${rowSize.match}`}>
+                                      <span className="font-bold text-gray-700">
+                                        Équipe {m.home_team === "M17Dep1" ? "1" : "2"}
+                                      </span>
+                                      <span className="text-gray-400 mx-2">vs</span>
+                                      <span className="text-blue-700">{opponentOf(m)}</span>
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="flex flex-col justify-center shrink-0">
+                                {entry.matches.map((m, i) => (
+                                  <div key={i} className="flex items-center justify-end" style={{ height: rowH }}>
+                                    <span className={`${rowSize.badge} font-bold px-3 py-1 rounded-md ${gymBadge(m.location || "")}`}>
+                                      {m.location}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </li>
+                          );
+                        }
+
+                        const m = entry.match;
+                        return (
+                          <li
+                            key={`${day.date}-${entryIdx}`}
+                            className={`flex items-center gap-4 px-6 whitespace-nowrap overflow-hidden ${stripe} ${separator}`}
+                            style={{ height: rowH }}
                           >
-                            {m.location}
-                          </span>
-                        </li>
-                      ))
+                            <span className={`${rowSize.day} font-semibold text-blue-700 w-24 shrink-0 capitalize`}>
+                              {dayShort(day.date)}
+                            </span>
+                            <span className={`${rowSize.time} font-extrabold text-blue-800 tabular-nums w-20 shrink-0 text-center`}>
+                              {m.time || "à définir"}
+                            </span>
+                            <span className={`${rowSize.match} leading-tight min-w-0`}>
+                              <span className="font-bold text-gray-900">{getTeamDisplayName(m.home_team)}</span>
+                              <span className="text-gray-400 mx-2">vs</span>
+                              <span className="text-blue-700">{opponentOf(m)}</span>
+                            </span>
+                            <span
+                              className={`${rowSize.badge} font-bold px-3 py-1 rounded-md shrink-0 ml-auto ${gymBadge(m.location || "")}`}
+                            >
+                              {m.location}
+                            </span>
+                          </li>
+                        );
+                      })
                     )}
                   </ul>
                 </div>
