@@ -32,11 +32,19 @@ const ROW_SIZES = {
 const toIsoDate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-// Samedi de la semaine de la date donnée
-function saturdayOf(dateIso: string): string {
+// Clé de regroupement d'une date :
+// - samedi et dimanche -> le samedi de ce week-end (le week-end va du samedi au dimanche)
+// - les autres jours (match en semaine) -> groupe propre, classé chronologiquement
+function weekendKeyOf(dateIso: string): string {
   const d = new Date(dateIso);
-  d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7));
-  return toIsoDate(d);
+  const day = d.getDay();
+  if (day === 0) {
+    // dimanche : samedi de la veille
+    d.setDate(d.getDate() - 1);
+    return toIsoDate(d);
+  }
+  // samedi ou jour de semaine : la date elle-même
+  return dateIso;
 }
 
 const dayShort = (dateIso: string) => {
@@ -44,9 +52,27 @@ const dayShort = (dateIso: string) => {
   return `${DAYS_SHORT[d.getDay()]} ${d.getDate()}`;
 };
 
+const formatLong = (dateIso: string) => {
+  const d = new Date(dateIso);
+  return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+};
+
 const formatShort = (dateIso: string) => {
   const d = new Date(dateIso);
   return `${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 4)}.`;
+};
+
+// Libellé de la bande : "Week-end du sam. au dim.", ou le jour pour un match en semaine
+const groupLabel = (dates: string[]) => {
+  const isWeekendDay = (iso: string) => [0, 6].includes(new Date(iso).getDay());
+  if (!dates.every(isWeekendDay)) {
+    return formatLong(dates[0]);
+  }
+  if (dates.length > 1) {
+    return `Week-end du ${formatShort(dates[0])} au ${formatShort(dates[dates.length - 1])}`;
+  }
+  const d = new Date(dates[0]);
+  return d.getDay() === 6 ? `Samedi ${formatShort(dates[0])}` : `Dimanche ${formatShort(dates[0])}`;
 };
 
 const gymBadge = (location: string) => {
@@ -122,7 +148,7 @@ export default function AffichePage() {
     matches
       .filter((m) => isHomeMatch(m) && m.date!.startsWith(monthPrefix))
       .forEach((m) => {
-        const key = saturdayOf(m.date!);
+        const key = weekendKeyOf(m.date!);
         (byWeekend[key] ||= []).push(m);
       });
 
@@ -308,9 +334,7 @@ export default function AffichePage() {
                     style={{ height: WEEKEND_BAND_H }}
                   >
                     <h3 className="text-2xl font-bold capitalize">
-                      {days.length > 1
-                        ? `Week-end du ${formatShort(days[0].date)} au ${formatShort(days[days.length - 1].date)}`
-                        : `${formatShort(days[0].date)}`}
+                      {groupLabel(days.map((d) => d.date))}
                     </h3>
                   </div>
                   <ul>
