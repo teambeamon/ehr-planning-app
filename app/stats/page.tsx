@@ -36,7 +36,7 @@ export default function StatsPage() {
   // Liste des équipes EHR (noms normalisés en base)
   const ehrTeams = new Set([
     'Seniors M', 'Seniors F1', 'Seniors F2',
-    'M17', 'M17Dep1', 'M17Dep2', 'F17', 'F17CDF', 'F17Dep', 'M15', 'F15',
+    'M17Dep1', 'M17Dep2', 'F17CDF', 'F17Dep', 'M15', 'F15',
     'M13', 'F13', 'M11', 'F11'
   ]);
 
