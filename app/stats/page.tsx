@@ -36,7 +36,7 @@ export default function StatsPage() {
   // Liste des équipes EHR (noms normalisés en base)
   const ehrTeams = new Set([
     'Seniors M', 'Seniors F1', 'Seniors F2',
-    'M18', 'F18', 'M17', 'F17', 'F17CDF', 'F17Dep', 'M15', 'F15',
+    'M17', 'M17Dep', 'M17Reg', 'F17', 'F17CDF', 'F17Dep', 'M15', 'F15',
     'M13', 'F13', 'M11', 'F11'
   ]);
 
@@ -259,29 +259,6 @@ export default function StatsPage() {
               />
               <Legend wrapperStyle={{ fontSize: '12px' }} />
             </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Matchs par Catégorie */}
-        <div className="card">
-          <h2 className="text-xl font-semibold text-blue-800 mb-6">
-            🏆 Matchs par Catégorie
-          </h2>
-          <ResponsiveContainer width="100%" height={350}>
-            <BarChart data={categoryStats}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e0e7ff" />
-              <XAxis dataKey="category" tick={{ fill: '#4f46e5', fontSize: 12 }} />
-              <YAxis tick={{ fill: '#4f46e5', fontSize: 12 }} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1e40af',
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: 'white'
-                }}
-              />
-              <Bar dataKey="count" fill="#fbbf24" radius={[8, 8, 0, 0]} />
-            </BarChart>
           </ResponsiveContainer>
         </div>
 
