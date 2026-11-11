@@ -118,10 +118,10 @@ export default function StatsPage() {
       });
   };
 
-  // Stats des camionnettes par équipe : nombre d'utilisations et dernière utilisation
+  // Stats des camionnettes par équipe : nombre d'utilisations, dates et dernière utilisation
   // Une réservation (équipe + date) compte pour une seule utilisation
   const getCamionnetteStats = () => {
-    const stats: Record<string, { count: number; lastUsed: string | null }> = {};
+    const stats: Record<string, { count: number; dates: string[] }> = {};
     const counted = new Set<string>();
 
     matches.forEach((match) => {
@@ -130,15 +130,13 @@ export default function StatsPage() {
       if (counted.has(key)) return;
       counted.add(key);
       const name = getTeamDisplayName(match.camionnette);
-      const entry = stats[name] || (stats[name] = { count: 0, lastUsed: null });
+      const entry = stats[name] || (stats[name] = { count: 0, dates: [] });
       entry.count += 1;
-      if (!entry.lastUsed || match.date > entry.lastUsed) {
-        entry.lastUsed = match.date;
-      }
+      if (!entry.dates.includes(match.date)) entry.dates.push(match.date);
     });
 
     return Object.entries(stats)
-      .map(([team, s]) => ({ team, count: s.count, lastUsed: s.lastUsed }))
+      .map(([team, s]) => ({ team, count: s.count, dates: [...s.dates].sort() }))
       .sort((a, b) => b.count - a.count || a.team.localeCompare(b.team));
   };
 
@@ -148,6 +146,35 @@ export default function StatsPage() {
   const categoryStats = useMemo(() => getCategoryStats(), [matches]);
   const monthlyStats = useMemo(() => getMonthlyStats(), [matches]);
   const camionnetteStats = useMemo(() => getCamionnetteStats(), [matches]);
+
+  // Date du jour et dates du week-end qui vient (samedi/dimanche), en ISO local
+  const toIsoDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const todayIso = useMemo(() => toIsoDate(new Date()), []);
+  const nextWeekend = useMemo(() => {
+    const now = new Date();
+    const saturday = new Date(now);
+    saturday.setDate(now.getDate() + ((6 - now.getDay() + 7) % 7));
+    const sunday = new Date(saturday);
+    sunday.setDate(saturday.getDate() + 1);
+    return { saturday: toIsoDate(saturday), sunday: toIsoDate(sunday) };
+  }, []);
+
+  // Prochaine réservation de camionnette (première date >= aujourd'hui)
+  const nextCamionnetteUsage = useMemo(() => {
+    return (
+      camionnetteStats
+        .flatMap(({ team, dates }) => dates.map((date) => ({ team, date })))
+        .filter(({ date }) => date >= todayIso)
+        .sort((a, b) => a.date.localeCompare(b.date))[0] || null
+    );
+  }, [camionnetteStats, todayIso]);
+
+  // Dernière date d'utilisation toutes équipes confondues
+  const lastCamionnetteDate = useMemo(() => {
+    const all = camionnetteStats.flatMap((s) => s.dates);
+    return all.length > 0 ? all.reduce((latest, d) => (d > latest ? d : latest)) : null;
+  }, [camionnetteStats]);
 
   if (isLoading) {
     return (
@@ -307,23 +334,55 @@ export default function StatsPage() {
             <p className="text-sm text-gray-500">Aucune réservation de camionnette.</p>
           ) : (
             <>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-gray-600 mb-2">
                 {camionnetteStats.reduce((total, s) => total + s.count, 0)} utilisation(s) au total — dernière :{" "}
-                {formatDate(
-                  camionnetteStats.reduce<string | null>(
-                    (latest, s) => (!s.lastUsed || (latest && s.lastUsed <= latest) ? latest : s.lastUsed),
-                    null
-                  )
-                )}
+                {formatDate(lastCamionnetteDate)}
               </p>
-              <ul className="space-y-2">
-                {camionnetteStats.map(({ team, count, lastUsed }) => (
-                  <li key={team} className="flex items-center gap-3">
-                    <span className="flex-1 text-sm font-medium text-gray-700">{team}</span>
-                    <span className="text-sm text-gray-500">
-                      Dernière : {formatDate(lastUsed)}
-                    </span>
-                    <span className="w-12 text-right text-sm font-bold text-blue-800">{count}</span>
+              {nextCamionnetteUsage && (
+                <p className="text-sm font-semibold text-blue-800 mb-4">
+                  Prochaine réservation : {nextCamionnetteUsage.team} le {formatDate(nextCamionnetteUsage.date)}
+                  {(nextCamionnetteUsage.date === nextWeekend.saturday ||
+                    nextCamionnetteUsage.date === nextWeekend.sunday) &&
+                    " (week-end à venir — cette équipe a les clés)"}
+                </p>
+              )}
+              {!nextCamionnetteUsage && (
+                <p className="text-sm text-gray-500 mb-4">Aucune réservation à venir.</p>
+              )}
+              <ul className="space-y-3">
+                {camionnetteStats.map(({ team, count, dates }) => (
+                  <li key={team}>
+                    <div className="flex items-center gap-3 mb-1">
+                      <span className="flex-1 text-sm font-medium text-gray-700">{team}</span>
+                      <span className="w-12 text-right text-sm font-bold text-blue-800">{count}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {dates.map((d) => {
+                        const isNext =
+                          nextCamionnetteUsage &&
+                          nextCamionnetteUsage.team === team &&
+                          nextCamionnetteUsage.date === d;
+                        const isPast = d < todayIso;
+                        const isWeekend = d === nextWeekend.saturday || d === nextWeekend.sunday;
+                        return (
+                          <span
+                            key={d}
+                            className={
+                              isNext
+                                ? "text-xs px-2 py-0.5 rounded bg-yellow-300 text-yellow-900 font-bold"
+                                : isPast
+                                  ? "text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-400"
+                                  : isWeekend
+                                    ? "text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700 font-medium"
+                                    : "text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-600"
+                            }
+                          >
+                            {formatDate(d)}
+                            {isNext && (isWeekend ? " (à venir)" : " (prochaine)")}
+                          </span>
+                        );
+                      })}
+                    </div>
                   </li>
                 ))}
               </ul>
