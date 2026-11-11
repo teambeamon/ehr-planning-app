@@ -41,7 +41,15 @@ export async function saveUploadToHistory(filename: string, season: string, last
 
   try {
     await executeQuery(
-      `INSERT INTO ${UPLOAD_HISTORY_TABLE} (filename, season, last_updated, match_count, file_hash, data_snapshot) VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO ${UPLOAD_HISTORY_TABLE} (filename, season, last_updated, match_count, file_hash, data_snapshot)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(file_hash) DO UPDATE SET
+         filename = excluded.filename,
+         season = excluded.season,
+         last_updated = excluded.last_updated,
+         match_count = excluded.match_count,
+         data_snapshot = excluded.data_snapshot,
+         uploaded_at = CURRENT_TIMESTAMP`,
       [filename, season, lastUpdated, matchCount, fileHash, snapshot],
     );
   } catch (error) {

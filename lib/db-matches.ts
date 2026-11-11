@@ -48,6 +48,37 @@ export async function initializeMatchesTable() {
 
     await executeQuery(`CREATE INDEX IF NOT EXISTS idx_matches_home_team ON ${MATCHES_TABLE}(home_team)`, []);
 
+    // Migration : la table peut exister avec un schéma ancien (CREATE TABLE IF NOT EXISTS
+    // ne modifie pas une table existante), on ajoute les colonnes manquantes
+    const expectedColumns: Record<string, string> = {
+      match_display: 'TEXT',
+      day: 'TEXT',
+      time: 'TEXT',
+      match_type: "TEXT DEFAULT 'Championnat'",
+      category: 'TEXT',
+      season: "TEXT DEFAULT '2026-2027'",
+      last_updated: 'TEXT',
+      coach: 'TEXT',
+      camionnette: 'TEXT',
+      is_home: 'INTEGER DEFAULT 0',
+      is_away: 'INTEGER DEFAULT 0',
+      is_internal: 'INTEGER DEFAULT 0',
+      original_team: 'TEXT',
+      original_column: 'INTEGER'
+    };
+    try {
+      const columnsResult = await executeQuery(`PRAGMA table_info(${MATCHES_TABLE})`, []);
+      const existingColumns = new Set(columnsResult.rows.map((r: any) => r.name));
+      for (const [col, type] of Object.entries(expectedColumns)) {
+        if (!existingColumns.has(col)) {
+          await executeQuery(`ALTER TABLE ${MATCHES_TABLE} ADD COLUMN ${col} ${type}`, []);
+          console.log(`Colonne ajoutée à ${MATCHES_TABLE}: ${col}`);
+        }
+      }
+    } catch (error) {
+      console.error("Erreur migration colonnes:", error);
+    }
+
     console.log("Table matches initialisée avec succès");
   } catch (error) {
     console.error("Erreur lors de l'initialisation:", error);
