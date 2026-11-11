@@ -20,6 +20,7 @@ export default function Navigation() {
     { href: "/", label: "Accueil" },
     { href: "/planning", label: "Calendrier" },
     { href: "/matches", label: "Tous les matchs" },
+    { href: "/affiche", label: "Affiche" },
     { href: "/stats", label: "Statistiques" },
     { href: "/buvettes", label: "Gestion buvettes" },
     { href: "/changes", label: "Changements" },

@@ -119,6 +119,41 @@
   @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8;
 }
 
+/* Impression de l'affiche mensuelle (page /affiche) */
+@media print {
+  @page {
+    size: A3 portrait;
+    margin: 10mm;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  /* Masquer la navigation et les contrôles à l'impression */
+  nav,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Forcer l'impression des couleurs de fond (bandeaux bleus/jaunes) */
+  .print-colors {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Ne pas couper un week-end entre deux pages */
+  .print-break-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .container-custom {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+}
+
 /* Statistiques */
 .stat-card {
   @apply bg-white rounded-xl p-6 shadow-lg border border-blue-100 transition-all duration-300 hover:shadow-xl;
