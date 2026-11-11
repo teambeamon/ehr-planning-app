@@ -118,26 +118,37 @@ export default function StatsPage() {
       });
   };
 
-  // Stats des camionnettes par équipe : nombre d'utilisations, dates et dernière utilisation
+  // Stats des camionnettes : par équipe (compteur + dates) et par date (nombre de camionnettes)
   // Une réservation (équipe + date) compte pour une seule utilisation
-  const getCamionnetteStats = () => {
-    const stats: Record<string, { count: number; dates: string[] }> = {};
+  // Le champ camionnette peut contenir "Equipe A + Equipe B" si les 2 camionnettes sont réservées
+  const camionnetteData = () => {
+    const perDate: Record<string, { vans: number; teams: string[] }> = {};
+    const perTeam: Record<string, { count: number; dates: string[] }> = {};
     const counted = new Set<string>();
 
     matches.forEach((match) => {
       if (!match.camionnette || !match.is_home || !match.date) return;
-      const key = `${match.date}|${match.camionnette}`;
+      const matchDate = match.date;
+      const key = `${matchDate}|${match.camionnette}`;
       if (counted.has(key)) return;
       counted.add(key);
-      const name = getTeamDisplayName(match.camionnette);
-      const entry = stats[name] || (stats[name] = { count: 0, dates: [] });
-      entry.count += 1;
-      if (!entry.dates.includes(match.date)) entry.dates.push(match.date);
+      const segments = match.camionnette.split(/\s*\+\s*/).map((s) => s.trim()).filter(Boolean);
+      const dateEntry = perDate[matchDate] || (perDate[matchDate] = { vans: 0, teams: [] });
+      segments.forEach((seg) => {
+        dateEntry.vans += 1;
+        const name = getTeamDisplayName(seg);
+        if (!dateEntry.teams.includes(name)) dateEntry.teams.push(name);
+        const teamEntry = perTeam[name] || (perTeam[name] = { count: 0, dates: [] });
+        teamEntry.count += 1;
+        teamEntry.dates.push(matchDate);
+      });
     });
 
-    return Object.entries(stats)
-      .map(([team, s]) => ({ team, count: s.count, dates: [...s.dates].sort() }))
+    const teamStats = Object.entries(perTeam)
+      .map(([team, e]) => ({ team, count: e.count, dates: [...e.dates].sort() }))
       .sort((a, b) => b.count - a.count || a.team.localeCompare(b.team));
+
+    return { teamStats, perDate };
   };
 
   // Memoize all stats calculations
@@ -145,7 +156,7 @@ export default function StatsPage() {
   const locationStats = useMemo(() => getLocationStats(), [matches]);
   const categoryStats = useMemo(() => getCategoryStats(), [matches]);
   const monthlyStats = useMemo(() => getMonthlyStats(), [matches]);
-  const camionnetteStats = useMemo(() => getCamionnetteStats(), [matches]);
+  const { teamStats: camionnetteStats, perDate: camionnettePerDate } = useMemo(() => camionnetteData(), [matches]);
 
   // Date du jour et dates du week-end qui vient (samedi/dimanche), en ISO local
   const toIsoDate = (d: Date) =>
@@ -160,21 +171,23 @@ export default function StatsPage() {
     return { saturday: toIsoDate(saturday), sunday: toIsoDate(sunday) };
   }, []);
 
-  // Prochaine réservation de camionnette (première date >= aujourd'hui)
+  // Prochaine utilisation : première date >= aujourd'hui, avec le nombre de camionnettes
   const nextCamionnetteUsage = useMemo(() => {
-    return (
-      camionnetteStats
-        .flatMap(({ team, dates }) => dates.map((date) => ({ team, date })))
-        .filter(({ date }) => date >= todayIso)
-        .sort((a, b) => a.date.localeCompare(b.date))[0] || null
-    );
-  }, [camionnetteStats, todayIso]);
+    const upcoming = Object.entries(camionnettePerDate)
+      .filter(([date]) => date >= todayIso)
+      .sort(([a], [b]) => a.localeCompare(b));
+    if (upcoming.length === 0) return null;
+    const [date, { vans, teams }] = upcoming[0];
+    return { date, vans, teams };
+  }, [camionnettePerDate, todayIso]);
 
-  // Dernière date d'utilisation toutes équipes confondues
-  const lastCamionnetteDate = useMemo(() => {
-    const all = camionnetteStats.flatMap((s) => s.dates);
-    return all.length > 0 ? all.reduce((latest, d) => (d > latest ? d : latest)) : null;
-  }, [camionnetteStats]);
+  // Total des utilisations (toutes camionnettes confondues) et dernière date
+  const camionnetteTotals = useMemo(() => {
+    const entries = Object.entries(camionnettePerDate);
+    const totalVans = entries.reduce((t, [, e]) => t + e.vans, 0);
+    const lastDate = entries.reduce<string | null>((m, [d]) => (!m || d > m ? d : m), null);
+    return { totalVans, lastDate };
+  }, [camionnettePerDate]);
 
   if (isLoading) {
     return (
@@ -335,15 +348,17 @@ export default function StatsPage() {
           ) : (
             <>
               <p className="text-sm text-gray-600 mb-2">
-                {camionnetteStats.reduce((total, s) => total + s.count, 0)} utilisation(s) au total — dernière :{" "}
-                {formatDate(lastCamionnetteDate)}
+                {camionnetteTotals.totalVans} utilisation(s) au total — dernière :{" "}
+                {formatDate(camionnetteTotals.lastDate)}
               </p>
               {nextCamionnetteUsage && (
                 <p className="text-sm font-semibold text-blue-800 mb-4">
-                  Prochaine réservation : {nextCamionnetteUsage.team} le {formatDate(nextCamionnetteUsage.date)}
+                  Prochaine utilisation : {formatDate(nextCamionnetteUsage.date)} —{" "}
+                  {nextCamionnetteUsage.vans} camionnette{nextCamionnetteUsage.vans > 1 ? "s" : ""} (
+                  {nextCamionnetteUsage.teams.join(", ")})
                   {(nextCamionnetteUsage.date === nextWeekend.saturday ||
                     nextCamionnetteUsage.date === nextWeekend.sunday) &&
-                    " (week-end à venir — cette équipe a les clés)"}
+                    ` (week-end à venir — ${nextCamionnetteUsage.vans > 1 ? "ces équipes ont" : "cette équipe a"} les clés)`}
                 </p>
               )}
               {!nextCamionnetteUsage && (
@@ -358,12 +373,14 @@ export default function StatsPage() {
                     </div>
                     <div className="flex flex-wrap gap-1">
                       {dates.map((d) => {
+                        const vans = camionnettePerDate[d]?.vans || 1;
                         const isNext =
                           nextCamionnetteUsage &&
-                          nextCamionnetteUsage.team === team &&
-                          nextCamionnetteUsage.date === d;
+                          nextCamionnetteUsage.date === d &&
+                          nextCamionnetteUsage.teams.includes(team);
                         const isPast = d < todayIso;
                         const isWeekend = d === nextWeekend.saturday || d === nextWeekend.sunday;
+                        const vanBadge = vans > 1 ? ` (x${vans})` : "";
                         return (
                           <span
                             key={d}
@@ -378,6 +395,7 @@ export default function StatsPage() {
                             }
                           >
                             {formatDate(d)}
+                            {vanBadge}
                             {isNext && (isWeekend ? " (à venir)" : " (prochaine)")}
                           </span>
                         );

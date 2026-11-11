@@ -313,18 +313,23 @@ async function parseExcelFile(buffer: Buffer): Promise<any[]> {
       processedRows.add(rowIdx + i);
     }
 
-    // Lire les camionnettes pour ce bloc (colonnes 2 et 3)
+    // Lire les camionnettes pour ce bloc (colonnes 2 et 3 : camionnette N°1 et N°2)
     // Les cellules contiennent des abréviations (ex: "17 CDF", "15 G", "SF1"),
     // éventuellement préfixées par "Camionnette" ou des tirets
-    let dateCamionnette: string | null = null;
-    for (let r = rowIdx; r < rowIdx + blockSize && r < data.length && !dateCamionnette; r++) {
-      const cC = cleanText(String(data[r]?.[2] || ''));
-      const cD = cleanText(String(data[r]?.[3] || ''));
-      const teamC = normalizeCamionnetteCell(cC);
-      const teamD = normalizeCamionnetteCell(cD);
-      // La colonne C a la priorité ; la colonne D sert de repli
-      dateCamionnette = teamC || teamD;
+    let dateCamionnetteC: string | null = null;
+    let dateCamionnetteD: string | null = null;
+    for (let r = rowIdx; r < rowIdx + blockSize && r < data.length; r++) {
+      if (!dateCamionnetteC) {
+        dateCamionnetteC = normalizeCamionnetteCell(cleanText(String(data[r]?.[2] || '')));
+      }
+      if (!dateCamionnetteD) {
+        dateCamionnetteD = normalizeCamionnetteCell(cleanText(String(data[r]?.[3] || '')));
+      }
+      if (dateCamionnetteC && dateCamionnetteD) break;
     }
+    // Les deux camionnettes peuvent être réservées le même jour : on les combine
+    const camionnetteParts = [dateCamionnetteC, dateCamionnetteD].filter((t): t is string => !!t);
+    const dateCamionnette: string | null = camionnetteParts.length > 0 ? camionnetteParts.join(' + ') : null;
 
     // Parcourir chaque colonne d'équipe
     for (const [col, colInfo] of Array.from(columns.entries())) {
