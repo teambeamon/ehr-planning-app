@@ -28,6 +28,14 @@ function normalizeTeamName(name: string): string {
     .replace(/\s+/g, ' ')
     .trim();
   cleaned = cleaned.replace(/^[\s-]*/, '').trim();
+  // Distinguer les deux équipes 17 ans Filles :
+  // - équipe 1 (Championnat de France) -> F17CDF
+  // - équipe 2 (Départemental) -> F17Dep
+  const upper = cleaned.toUpperCase();
+  if (/17\s*ANS\s*F|^17\s*F|^F17/.test(upper)) {
+    if (/CDF/.test(upper) || /ÉQUIP(EMENT)?\s*1/.test(upper)) return 'F17CDF';
+    if (/D[ÉE]P/.test(upper) || /ÉQUIP(EMENT)?\s*2/.test(upper)) return 'F17Dep';
+  }
   cleaned = cleaned.replace(/\s*\([^)]*\)/g, '').trim();
   cleaned = cleaned
     .replace(/Seniors Filles\s*HR\s*1/i, 'Seniors F1')
@@ -84,7 +92,7 @@ function getCategoryFromText(text: string): string {
 
 const EHR_TEAMS = new Set<string>([
   'Seniors M', 'Seniors F1', 'Seniors F2',
-  'M18', 'F18', 'M17', 'F17', 'M15', 'F15', 'M13', 'F13', 'M11', 'F11'
+  'M18', 'F18', 'M17', 'F17', 'F17CDF', 'F17Dep', 'M15', 'F15', 'M13', 'F13', 'M11', 'F11'
 ]);
 
 function isEHRTeam(name: string): boolean {
